@@ -1,9 +1,11 @@
-import { Injectable, InternalServerErrorException, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, Inject, Injectable, InternalServerErrorException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import type { AdminProfile } from "@auto-fb/shared";
+import { envKeys } from "../common/app.constants.js";
+import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 
-export type SupabaseActor = {
+export type SupabaseActor = AdminProfile & {
   id: string;
-  email?: string;
 };
 
 @Injectable()
@@ -11,13 +13,16 @@ export class SupabaseAuthService {
   private readonly supabaseUrl: string | undefined;
   private readonly apiKey: string | undefined;
 
-  constructor(config: ConfigService) {
-    this.supabaseUrl = config.get<string>("SUPABASE_URL")?.replace(/\/$/, "");
+  constructor(
+    config: ConfigService,
+    @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository
+  ) {
+    this.supabaseUrl = config.get<string>(envKeys.supabaseUrl)?.replace(/\/$/, "");
     this.apiKey =
-      config.get<string>("SUPABASE_SECRET_KEY") ??
-      config.get<string>("SUPABASE_SERVICE_ROLE_KEY") ??
-      config.get<string>("SUPABASE_SERVICE_KEY") ??
-      config.get<string>("SUPABASE_ANON_KEY");
+      config.get<string>(envKeys.supabaseSecretKey) ??
+      config.get<string>(envKeys.supabaseServiceRoleKey) ??
+      config.get<string>(envKeys.supabaseServiceKey) ??
+      config.get<string>(envKeys.supabaseAnonKey);
   }
 
   async authenticateAuthorizationHeader(authorization: string | undefined): Promise<SupabaseActor> {
@@ -26,7 +31,7 @@ export class SupabaseAuthService {
       throw new UnauthorizedException("Missing Supabase bearer token");
     }
     if (!this.supabaseUrl || !this.apiKey) {
-      throw new InternalServerErrorException("SUPABASE_URL and a Supabase API key are required for authenticated workflow endpoints");
+      throw new InternalServerErrorException(`${envKeys.supabaseUrl} and a Supabase API key are required for authenticated workflow endpoints`);
     }
 
     let response: Response;
@@ -52,7 +57,12 @@ export class SupabaseAuthService {
     }
 
     const email = typeof body.email === "string" ? body.email : undefined;
-    return email ? { id: body.id, email } : { id: body.id };
+    const profile = await this.db.getAdminProfileForAuthUser(body.id, email);
+    if (!profile) {
+      throw new ForbiddenException("Supabase user is not an active admin user");
+    }
+
+    return { ...profile, authUserId: body.id, id: body.id };
   }
 }
 

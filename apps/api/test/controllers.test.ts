@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { permissionsForRole } from "@auto-fb/shared";
 import { AgentRunsController } from "../src/workflow/agent-runs.controller.js";
 import { CampaignsController } from "../src/campaigns/campaigns.controller.js";
 import { DraftsController } from "../src/drafts/drafts.controller.js";
@@ -103,13 +104,19 @@ describe("AgentRunsController", () => {
       listAgentWorkflowRuns: vi.fn().mockReturnValue([workflowRun])
     };
     const controller = new AgentRunsController(queue as never, events as never, db as never);
+    const actor = {
+      authUserId: "user_1",
+      email: "admin@example.com",
+      id: "user_1",
+      permissions: permissionsForRole("owner"),
+      role: "owner" as const,
+      status: "active" as const
+    };
 
-    await expect(controller.run("camp_1", { headers: {}, user: { id: "user_1", email: "admin@example.com" } })).resolves.toEqual(
-      workflowRun
-    );
+    await expect(controller.run("camp_1", { headers: {}, user: actor })).resolves.toEqual(workflowRun);
     await expect(controller.list("camp_1", "graph_1")).resolves.toHaveLength(1);
     await expect(controller.listWorkflowRuns("camp_1", "QUEUED", "25")).resolves.toHaveLength(1);
-    expect(queue.enqueue).toHaveBeenCalledWith("camp_1", { id: "user_1", email: "admin@example.com" });
+    expect(queue.enqueue).toHaveBeenCalledWith("camp_1", actor);
     expect(db.listAgentRuns).toHaveBeenCalledWith({ campaignId: "camp_1", graphRunId: "graph_1" });
     expect(db.listAgentWorkflowRuns).toHaveBeenCalledWith({ campaignId: "camp_1", status: "QUEUED", limit: 25 });
   });

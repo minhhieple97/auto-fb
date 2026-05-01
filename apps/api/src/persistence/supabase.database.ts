@@ -2,10 +2,15 @@ import { Injectable, InternalServerErrorException, NotFoundException } from "@ne
 import { ConfigService } from "@nestjs/config";
 import type {
   AgentRun,
+  AgentRunFilters,
   AgentRunStatus,
   AgentWorkflowRun,
   AgentWorkflowRunDetail,
+  AgentWorkflowRunFilters,
   AgentWorkflowRunStatus,
+  AdminProfile,
+  AdminUserStatus,
+  AppRole,
   ApprovalStatus,
   Campaign,
   CampaignStatus,
@@ -27,7 +32,9 @@ import type {
   TablesUpdate,
   UpdateCampaignInput
 } from "@auto-fb/shared";
+import { adminUserStatuses, campaignStatuses, permissionsForRole } from "@auto-fb/shared";
 import { randomUUID } from "node:crypto";
+import { appDefaults, envKeys } from "../common/app.constants.js";
 import { nowIso } from "../common/time.js";
 import type {
   CreateAgentRunInput,
@@ -37,8 +44,6 @@ import type {
   CreateImageAssetInput,
   CreatePublishedPostInput,
   DatabaseRepository,
-  AgentRunFilters,
-  AgentWorkflowRunFilters,
   UpdateAgentRunInput,
   UpdateAgentWorkflowRunInput
 } from "./database.repository.js";
@@ -62,8 +67,18 @@ type PostDraftJoinedRow = PostDraftRow & {
 type PublishedPostRow = Tables<"published_posts">;
 type AgentRunRow = Tables<"agent_runs">;
 type AgentWorkflowRunRow = Tables<"agent_workflow_runs">;
+type AdminUserRow = {
+  auth_user_id: string | null;
+  created_at: string;
+  email: string;
+  id: string;
+  role: AppRole;
+  status: AdminUserStatus;
+  updated_at: string;
+};
 
 const DRAFT_SELECT = "*,content_items(*),image_assets(*)";
+const SELECT_ONE_LIMIT = "1";
 
 @Injectable()
 export class SupabaseDatabase implements DatabaseRepository {
@@ -72,21 +87,47 @@ export class SupabaseDatabase implements DatabaseRepository {
   private readonly schema: string;
 
   constructor(config: ConfigService) {
-    const supabaseUrl = config.get<string>("SUPABASE_URL")?.replace(/\/$/, "");
+    const supabaseUrl = config.get<string>(envKeys.supabaseUrl)?.replace(/\/$/, "");
     const apiKey =
-      config.get<string>("SUPABASE_SECRET_KEY") ??
-      config.get<string>("SUPABASE_SERVICE_ROLE_KEY") ??
-      config.get<string>("SUPABASE_SERVICE_KEY");
+      config.get<string>(envKeys.supabaseSecretKey) ??
+      config.get<string>(envKeys.supabaseServiceRoleKey) ??
+      config.get<string>(envKeys.supabaseServiceKey);
 
     if (!supabaseUrl || !apiKey) {
       throw new Error(
-        "SUPABASE_URL and SUPABASE_SECRET_KEY are required for the Supabase database adapter. SUPABASE_SERVICE_ROLE_KEY is also accepted for legacy projects."
+        `${envKeys.supabaseUrl} and ${envKeys.supabaseSecretKey} are required for the Supabase database adapter. ${envKeys.supabaseServiceRoleKey} is also accepted for legacy projects.`
       );
     }
 
     this.restUrl = `${supabaseUrl}/rest/v1`;
     this.apiKey = apiKey;
-    this.schema = config.get<string>("SUPABASE_SCHEMA", "public");
+    this.schema = config.get<string>(envKeys.supabaseSchema, appDefaults.supabaseSchema);
+  }
+
+  async getAdminProfileForAuthUser(authUserId: string, email?: string): Promise<AdminProfile | undefined> {
+    let row = (
+      await this.selectAdminUsers({
+        auth_user_id: this.eq(authUserId),
+        status: this.eq(adminUserStatuses.active),
+        limit: SELECT_ONE_LIMIT
+      })
+    )[0];
+
+    if (!row && email) {
+      row = (
+        await this.selectAdminUsers({
+          email: this.eq(normalizeEmail(email)),
+          status: this.eq(adminUserStatuses.active),
+          limit: SELECT_ONE_LIMIT
+        })
+      )[0];
+
+      if (row && !row.auth_user_id) {
+        row = await this.updateAdminUserAuthId(row.id, authUserId);
+      }
+    }
+
+    return row ? toAdminProfile(row, authUserId) : undefined;
   }
 
   async createCampaign(input: CreateCampaignInput): Promise<Campaign> {
@@ -100,7 +141,7 @@ export class SupabaseDatabase implements DatabaseRepository {
       target_page_id: input.targetPageId,
       llm_provider: input.llmProvider,
       llm_model: input.llmModel,
-      status: "ACTIVE",
+      status: campaignStatuses.active,
       created_at: timestamp,
       updated_at: timestamp
     });
@@ -197,7 +238,7 @@ export class SupabaseDatabase implements DatabaseRepository {
       select: "id",
       campaign_id: this.eq(campaignId),
       hash: this.eq(hash),
-      limit: "1"
+      limit: SELECT_ONE_LIMIT
     });
     return rows.length > 0;
   }
@@ -381,7 +422,7 @@ export class SupabaseDatabase implements DatabaseRepository {
     const rows = await this.selectMany("content_items", {
       campaign_id: this.eq(campaignId),
       hash: this.eq(hash),
-      limit: "1"
+      limit: SELECT_ONE_LIMIT
     });
     const row = rows[0];
     return row ? toContentItem(row) : undefined;
@@ -392,6 +433,22 @@ export class SupabaseDatabase implements DatabaseRepository {
       ...toAgentWorkflowRun(row),
       steps: await this.listAgentRuns({ graphRunId: row.graph_run_id })
     };
+  }
+
+  private async selectAdminUsers(params: Record<string, string | undefined> = {}): Promise<AdminUserRow[]> {
+    return this.request<AdminUserRow[]>(this.path("admin_users", { select: "*", ...params }));
+  }
+
+  private async updateAdminUserAuthId(id: string, authUserId: string): Promise<AdminUserRow> {
+    const rows = await this.request<AdminUserRow[] | AdminUserRow>(
+      this.path("admin_users", { select: "*", id: this.eq(id) }),
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ auth_user_id: authUserId, updated_at: nowIso() })
+      }
+    );
+    return firstRepresentation(rows, `Admin user ${id} not found`);
   }
 
   private async selectMany<Table extends SupabaseTable, Row = Tables<Table>>(
@@ -406,7 +463,7 @@ export class SupabaseDatabase implements DatabaseRepository {
     params: Record<string, string | undefined>,
     notFoundMessage: string
   ): Promise<Row> {
-    const rows = await this.selectMany<Table, Row>(table, { ...params, limit: "1" });
+    const rows = await this.selectMany<Table, Row>(table, { ...params, limit: SELECT_ONE_LIMIT });
     const row = rows[0];
     if (!row) throw new NotFoundException(notFoundMessage);
     return row;
@@ -673,5 +730,19 @@ function toAgentWorkflowRun(row: AgentWorkflowRunRow): AgentWorkflowRun {
     createdAt: row.created_at,
     ...(row.started_at ? { startedAt: row.started_at } : {}),
     ...(row.finished_at ? { finishedAt: row.finished_at } : {})
+  };
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function toAdminProfile(row: AdminUserRow, fallbackAuthUserId: string): AdminProfile {
+  return {
+    authUserId: row.auth_user_id ?? fallbackAuthUserId,
+    email: row.email,
+    role: row.role,
+    status: row.status,
+    permissions: permissionsForRole(row.role)
   };
 }

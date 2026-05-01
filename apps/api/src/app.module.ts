@@ -9,11 +9,13 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
 import { LlmModule } from "./llm/llm.module.js";
 import { StorageModule } from "./storage/storage.module.js";
 import { WorkerModule } from "./worker/worker.module.js";
+import { AuthModule } from "./auth/auth.module.js";
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PersistenceModule,
+    AuthModule,
     LlmModule,
     StorageModule,
     CampaignsModule,
