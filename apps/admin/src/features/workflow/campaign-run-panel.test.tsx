@@ -27,7 +27,15 @@ describe("CampaignRunPanel", () => {
 
   it("starts the controlled workflow and refreshes generated artifacts", async () => {
     const user = userEvent.setup();
-    runWorkflow.mockResolvedValue({ ok: true });
+    runWorkflow.mockResolvedValue({
+      id: "workflow-run-1",
+      campaignId: "campaign-1",
+      graphRunId: "graph-1",
+      status: "QUEUED",
+      triggeredByUserId: "user-1",
+      createdAt: "2026-05-01T00:00:00.000Z",
+      steps: []
+    });
     const { queryClient } = renderWithClient(<CampaignRunPanel campaignId="campaign-1" />);
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
@@ -36,5 +44,6 @@ describe("CampaignRunPanel", () => {
     await waitFor(() => expect(runWorkflow).toHaveBeenCalledWith("campaign-1"));
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drafts"] }));
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["agent-runs"] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["agent-workflow-runs"] });
   });
 });

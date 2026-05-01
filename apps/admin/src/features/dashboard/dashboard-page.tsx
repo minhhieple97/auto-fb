@@ -1,19 +1,22 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, RefreshCw } from "lucide-react";
 import { useAdminStore } from "../../app/admin.store.js";
-import { useAuth } from "../../app/auth-provider.js";
 import { AgentTimeline } from "../agent-runs/agent-timeline.js";
 import { CampaignPanel } from "../campaigns/campaign-panel.js";
 import { DraftInbox } from "../drafts/draft-inbox.js";
+import type { AdminRoute } from "../navigation/admin-header.js";
+import { AdminHeader } from "../navigation/admin-header.js";
 import { PublishedHistory } from "../published-posts/published-history.js";
 import { SourcePanel } from "../sources/source-panel.js";
 import { CampaignRunPanel } from "../workflow/campaign-run-panel.js";
 import { api } from "../../lib/api-client.js";
 
-export function DashboardPage() {
+type DashboardPageProps = {
+  onNavigate: (route: AdminRoute) => void;
+};
+
+export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const queryClient = useQueryClient();
-  const { signOut, user } = useAuth();
   const selectedCampaignId = useAdminStore((state) => state.selectedCampaignId);
   const setSelectedCampaignId = useAdminStore((state) => state.setSelectedCampaignId);
   const campaigns = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
@@ -25,7 +28,7 @@ export function DashboardPage() {
   const drafts = useQuery({ queryKey: ["drafts"], queryFn: api.drafts });
   const agentRuns = useQuery({
     queryKey: ["agent-runs", selectedCampaignId],
-    queryFn: () => api.agentRuns(selectedCampaignId),
+    queryFn: () => api.agentRuns({ campaignId: selectedCampaignId }),
     enabled: Boolean(selectedCampaignId)
   });
   const publishedPosts = useQuery({ queryKey: ["published-posts"], queryFn: api.publishedPosts });
@@ -46,32 +49,9 @@ export function DashboardPage() {
     ]);
   };
 
-  const logout = async () => {
-    await signOut();
-    queryClient.clear();
-  };
-
   return (
     <main className="min-h-screen bg-canvas">
-      <header className="border-b border-line bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-normal text-ink">Auto FB Admin</h1>
-            <p className="text-sm text-slate-600">Multi-agent publishing workflow</p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {user?.email ? <span className="hidden text-sm text-slate-600 sm:inline">{user.email}</span> : null}
-            <button className="button border border-line bg-white text-ink" onClick={refreshAll} title="Refresh">
-              <RefreshCw size={16} />
-              Refresh
-            </button>
-            <button className="button border border-line bg-white text-ink" onClick={logout} title="Sign out">
-              <LogOut size={16} />
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AdminHeader activeRoute="/" onNavigate={onNavigate} onRefresh={refreshAll} />
 
       <div className="mx-auto grid max-w-7xl gap-4 px-6 py-6 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-4">
@@ -82,7 +62,7 @@ export function DashboardPage() {
         <section className="space-y-4">
           <CampaignRunPanel campaignId={selectedCampaignId} />
           <DraftInbox drafts={drafts.data ?? []} onChanged={refreshAll} />
-          <AgentTimeline runs={agentRuns.data ?? []} />
+          <AgentTimeline runs={agentRuns.data ?? []} onOpenDetails={() => onNavigate("/agent-runs")} />
           <PublishedHistory posts={publishedPosts.data ?? []} />
         </section>
       </div>
