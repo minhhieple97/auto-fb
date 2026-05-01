@@ -1,28 +1,39 @@
-import { FormEvent, useState } from "react";
+import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { KeyRound, LogIn } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { useAuth } from "../../app/auth-provider.js";
-import { stringField } from "../../lib/form.js";
+import { Button } from "../../components/ui/button.js";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "../../components/ui/form.js";
+import { Input } from "../../components/ui/input.js";
+
+const loginFormSchema = z.object({
+  email: z.string().trim().email("Enter a valid email address."),
+  password: z.string().trim().min(1, "Password is required.")
+});
+
+type LoginFormValues = z.infer<typeof loginFormSchema>;
 
 export function LoginPage() {
   const { error, signIn } = useAuth();
   const [localError, setLocalError] = useState<string | undefined>();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginFormSchema),
+    defaultValues: {
+      email: "",
+      password: ""
+    }
+  });
+  const isSubmitting = form.formState.isSubmitting;
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submit(values: LoginFormValues) {
     setLocalError(undefined);
-    setIsSubmitting(true);
 
     try {
-      const form = new FormData(event.currentTarget);
-      await signIn({
-        email: stringField(form, "email"),
-        password: stringField(form, "password")
-      });
+      await signIn(values);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Unable to sign in");
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -39,27 +50,47 @@ export function LoginPage() {
           </div>
         </div>
 
-        <form className="grid gap-3" onSubmit={submit}>
-          <label className="grid gap-1 text-sm font-medium text-ink">
-            Email
-            <input className="field" name="email" type="email" autoComplete="email" required disabled={isSubmitting} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-ink">
-            Password
-            <input className="field" name="password" type="password" autoComplete="current-password" required disabled={isSubmitting} />
-          </label>
+        <Form {...form}>
+          <form className="grid gap-3" noValidate onSubmit={form.handleSubmit(submit)}>
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input autoComplete="email" disabled={isSubmitting} type="email" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input autoComplete="current-password" disabled={isSubmitting} type="password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          {(localError ?? error) ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-              {localError ?? error}
-            </div>
-          ) : null}
+            {(localError ?? error) ? (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                {localError ?? error}
+              </div>
+            ) : null}
 
-          <button className="button bg-ink text-white" disabled={isSubmitting} title="Sign in">
-            <LogIn size={16} />
-            {isSubmitting ? "Signing in" : "Sign in"}
-          </button>
-        </form>
+            <Button disabled={isSubmitting} title="Sign in" type="submit">
+              <LogIn size={16} />
+              {isSubmitting ? "Signing in" : "Sign in"}
+            </Button>
+          </form>
+        </Form>
       </section>
     </main>
   );
