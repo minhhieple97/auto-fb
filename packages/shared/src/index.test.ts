@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   createCampaignSchema,
   createSourceSchema,
@@ -6,6 +6,7 @@ import {
   publishOptionsSchema,
   updateCampaignSchema
 } from "./index.js";
+import type { Database, Json, Tables, TablesInsert, TablesUpdate } from "./index.js";
 
 describe("shared API contracts", () => {
   it("applies campaign creation defaults at the shared contract boundary", () => {
@@ -59,5 +60,19 @@ describe("shared API contracts", () => {
     expect(postDraftSchema.parse({ ...baseDraft, riskScore: 100 })).toMatchObject({ riskScore: 100 });
     expect(() => postDraftSchema.parse({ ...baseDraft, riskScore: 101 })).toThrow();
     expect(publishOptionsSchema.parse({ dryRun: false })).toEqual({ dryRun: false });
+  });
+
+  it("exports generated Supabase database helper types", () => {
+    expectTypeOf<Database["public"]["Tables"]>().toHaveProperty("campaigns");
+    expectTypeOf<Tables<"campaigns">["brand_voice"]>().toEqualTypeOf<string>();
+    expectTypeOf<TablesInsert<"campaigns">>().toMatchTypeOf<{
+      name: string;
+      topic: string;
+      target_page_id: string;
+    }>();
+    expectTypeOf<TablesUpdate<"post_drafts">>().toMatchTypeOf<{
+      approval_status?: string;
+      risk_flags?: Json;
+    }>();
   });
 });
