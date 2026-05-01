@@ -2,25 +2,128 @@ import { z } from "zod";
 
 export type { CompositeTypes, Database, Enums, Json, Tables, TablesInsert, TablesUpdate } from "./database.types.js";
 
-export const campaignStatusSchema = z.enum(["ACTIVE", "PAUSED", "ARCHIVED"]);
-export const sourceTypeSchema = z.enum(["rss", "api", "static_html"]);
-export const llmProviderSchema = z.enum(["openai", "anthropic", "gemini", "deepseek", "mock"]);
-export const draftStatusSchema = z.enum(["PENDING_APPROVAL", "APPROVED", "REJECTED", "PUBLISHED"]);
-export const approvalStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
-export const publishStatusSchema = z.enum(["DRY_RUN_PUBLISHED", "PUBLISHED", "FAILED"]);
-export const agentRunStatusSchema = z.enum(["RUNNING", "SUCCESS", "FAILED"]);
-export const agentWorkflowRunStatusSchema = z.enum(["QUEUED", "RUNNING", "SUCCESS", "FAILED"]);
+export const campaignStatuses = {
+  active: "ACTIVE",
+  paused: "PAUSED",
+  archived: "ARCHIVED"
+} as const;
+export const campaignStatusValues = [campaignStatuses.active, campaignStatuses.paused, campaignStatuses.archived] as const;
 
-export const agentWorkflowNodeNames = [
-  "load_campaign",
-  "discover_sources",
-  "collect_content",
-  "understand_content",
-  "generate_post",
-  "prepare_image",
-  "qa_check",
-  "save_pending_approval"
+export const sourceTypes = {
+  rss: "rss",
+  api: "api",
+  staticHtml: "static_html"
+} as const;
+export const sourceTypeValues = [sourceTypes.rss, sourceTypes.api, sourceTypes.staticHtml] as const;
+
+export const llmProviders = {
+  openai: "openai",
+  anthropic: "anthropic",
+  gemini: "gemini",
+  deepseek: "deepseek",
+  mock: "mock"
+} as const;
+export const llmProviderValues = [llmProviders.openai, llmProviders.anthropic, llmProviders.gemini, llmProviders.deepseek, llmProviders.mock] as const;
+
+export const draftStatuses = {
+  pendingApproval: "PENDING_APPROVAL",
+  approved: "APPROVED",
+  rejected: "REJECTED",
+  published: "PUBLISHED"
+} as const;
+export const draftStatusValues = [draftStatuses.pendingApproval, draftStatuses.approved, draftStatuses.rejected, draftStatuses.published] as const;
+
+export const approvalStatuses = {
+  pending: "PENDING",
+  approved: "APPROVED",
+  rejected: "REJECTED"
+} as const;
+export const approvalStatusValues = [approvalStatuses.pending, approvalStatuses.approved, approvalStatuses.rejected] as const;
+
+export const publishStatuses = {
+  dryRunPublished: "DRY_RUN_PUBLISHED",
+  published: "PUBLISHED",
+  failed: "FAILED"
+} as const;
+export const publishStatusValues = [publishStatuses.dryRunPublished, publishStatuses.published, publishStatuses.failed] as const;
+
+export const agentRunStatuses = {
+  running: "RUNNING",
+  success: "SUCCESS",
+  failed: "FAILED"
+} as const;
+export const agentRunStatusValues = [agentRunStatuses.running, agentRunStatuses.success, agentRunStatuses.failed] as const;
+
+export const agentWorkflowRunStatuses = {
+  queued: "QUEUED",
+  running: "RUNNING",
+  success: "SUCCESS",
+  failed: "FAILED"
+} as const;
+export const agentWorkflowRunStatusValues = [
+  agentWorkflowRunStatuses.queued,
+  agentWorkflowRunStatuses.running,
+  agentWorkflowRunStatuses.success,
+  agentWorkflowRunStatuses.failed
 ] as const;
+
+export const agentWorkflowNodes = {
+  loadCampaign: "load_campaign",
+  discoverSources: "discover_sources",
+  collectContent: "collect_content",
+  understandContent: "understand_content",
+  generatePost: "generate_post",
+  prepareImage: "prepare_image",
+  qaCheck: "qa_check",
+  savePendingApproval: "save_pending_approval"
+} as const;
+export const agentWorkflowNodeNames = [
+  agentWorkflowNodes.loadCampaign,
+  agentWorkflowNodes.discoverSources,
+  agentWorkflowNodes.collectContent,
+  agentWorkflowNodes.understandContent,
+  agentWorkflowNodes.generatePost,
+  agentWorkflowNodes.prepareImage,
+  agentWorkflowNodes.qaCheck,
+  agentWorkflowNodes.savePendingApproval
+] as const;
+
+export const agentWorkflowRunEventTypes = {
+  workflowRunUpdated: "workflow_run_updated"
+} as const;
+
+export const workflowRunListLimits = {
+  default: 50,
+  min: 1,
+  max: 100
+} as const;
+
+export const postDraftRiskScoreLimits = {
+  min: 0,
+  max: 100
+} as const;
+
+export const campaignDefaults = {
+  language: "vi",
+  brandVoice: "helpful, concise, practical",
+  llmProvider: llmProviders.openai,
+  llmModel: "gpt-4o-mini"
+} as const;
+
+export const sourceDefaults = {
+  type: sourceTypes.rss,
+  crawlPolicy: "whitelist_only",
+  enabled: true
+} as const;
+
+export const campaignStatusSchema = z.enum(campaignStatusValues);
+export const sourceTypeSchema = z.enum(sourceTypeValues);
+export const llmProviderSchema = z.enum(llmProviderValues);
+export const draftStatusSchema = z.enum(draftStatusValues);
+export const approvalStatusSchema = z.enum(approvalStatusValues);
+export const publishStatusSchema = z.enum(publishStatusValues);
+export const agentRunStatusSchema = z.enum(agentRunStatusValues);
+export const agentWorkflowRunStatusSchema = z.enum(agentWorkflowRunStatusValues);
 
 export type CampaignStatus = z.infer<typeof campaignStatusSchema>;
 export type SourceType = z.infer<typeof sourceTypeSchema>;
@@ -31,6 +134,14 @@ export type PublishStatus = z.infer<typeof publishStatusSchema>;
 export type AgentRunStatus = z.infer<typeof agentRunStatusSchema>;
 export type AgentWorkflowRunStatus = z.infer<typeof agentWorkflowRunStatusSchema>;
 export type AgentWorkflowNodeName = (typeof agentWorkflowNodeNames)[number];
+
+export const llmProviderModels = {
+  openai: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"],
+  anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest"],
+  gemini: ["gemini-1.5-flash", "gemini-1.5-pro"],
+  deepseek: ["deepseek-chat", "deepseek-reasoner"],
+  mock: ["mock-copywriter-v1"]
+} as const satisfies Record<LlmProvider, readonly string[]>;
 
 export const campaignSchema = z.object({
   id: z.string(),
@@ -49,11 +160,11 @@ export const campaignSchema = z.object({
 export const createCampaignSchema = z.object({
   name: z.string().min(2),
   topic: z.string().min(2),
-  language: z.string().min(2).default("vi"),
-  brandVoice: z.string().min(2).default("helpful, concise, practical"),
+  language: z.string().min(2).default(campaignDefaults.language),
+  brandVoice: z.string().min(2).default(campaignDefaults.brandVoice),
   targetPageId: z.string().min(1),
-  llmProvider: llmProviderSchema.default("openai"),
-  llmModel: z.string().min(1).default("gpt-4o-mini")
+  llmProvider: llmProviderSchema.default(campaignDefaults.llmProvider),
+  llmModel: z.string().min(1).default(campaignDefaults.llmModel)
 });
 
 export const updateCampaignSchema = createCampaignSchema
@@ -73,8 +184,8 @@ export const sourceSchema = z.object({
 export const createSourceSchema = z.object({
   type: sourceTypeSchema,
   url: z.string().url(),
-  crawlPolicy: z.string().default("whitelist_only"),
-  enabled: z.boolean().default(true)
+  crawlPolicy: z.string().default(sourceDefaults.crawlPolicy),
+  enabled: z.boolean().default(sourceDefaults.enabled)
 });
 
 export const imageAssetSchema = z.object({
@@ -107,7 +218,7 @@ export const postDraftSchema = z.object({
   imageAssetId: z.string().optional(),
   text: z.string(),
   status: draftStatusSchema,
-  riskScore: z.number().int().min(0).max(100),
+  riskScore: z.number().int().min(postDraftRiskScoreLimits.min).max(postDraftRiskScoreLimits.max),
   riskFlags: z.array(z.string()),
   approvalStatus: approvalStatusSchema,
   createdAt: z.string(),
@@ -188,6 +299,17 @@ export type AgentTimeline = {
 };
 
 export type AgentWorkflowRunEvent = {
-  type: "workflow_run_updated";
+  type: (typeof agentWorkflowRunEventTypes)[keyof typeof agentWorkflowRunEventTypes];
   run: AgentWorkflowRunDetail;
+};
+
+export type AgentRunFilters = {
+  campaignId?: string;
+  graphRunId?: string;
+};
+
+export type AgentWorkflowRunFilters = {
+  campaignId?: string;
+  status?: AgentWorkflowRunStatus;
+  limit?: number;
 };

@@ -1,4 +1,4 @@
-import type { LlmProvider } from "@auto-fb/shared";
+import { llmProviderModels, llmProviders, type LlmProvider } from "@auto-fb/shared";
 
 export type ProviderDefinition = {
   provider: LlmProvider;
@@ -10,38 +10,38 @@ export type ProviderDefinition = {
 
 export const providerDefinitions: ProviderDefinition[] = [
   {
-    provider: "openai",
+    provider: llmProviders.openai,
     displayName: "OpenAI",
-    defaultModel: "gpt-4o-mini",
+    defaultModel: llmProviderModels.openai[0],
     envKey: "OPENAI_API_KEY",
-    models: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"]
+    models: [...llmProviderModels.openai]
   },
   {
-    provider: "anthropic",
+    provider: llmProviders.anthropic,
     displayName: "Anthropic Claude",
-    defaultModel: "claude-3-5-haiku-latest",
+    defaultModel: llmProviderModels.anthropic[0],
     envKey: "ANTHROPIC_API_KEY",
-    models: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest"]
+    models: [...llmProviderModels.anthropic]
   },
   {
-    provider: "gemini",
+    provider: llmProviders.gemini,
     displayName: "Google Gemini",
-    defaultModel: "gemini-1.5-flash",
+    defaultModel: llmProviderModels.gemini[0],
     envKey: "GEMINI_API_KEY",
-    models: ["gemini-1.5-flash", "gemini-1.5-pro"]
+    models: [...llmProviderModels.gemini]
   },
   {
-    provider: "deepseek",
+    provider: llmProviders.deepseek,
     displayName: "DeepSeek",
-    defaultModel: "deepseek-chat",
+    defaultModel: llmProviderModels.deepseek[0],
     envKey: "DEEPSEEK_API_KEY",
-    models: ["deepseek-chat", "deepseek-reasoner"]
+    models: [...llmProviderModels.deepseek]
   },
   {
-    provider: "mock",
+    provider: llmProviders.mock,
     displayName: "Mock local provider",
-    defaultModel: "mock-copywriter-v1",
-    models: ["mock-copywriter-v1"]
+    defaultModel: llmProviderModels.mock[0],
+    models: [...llmProviderModels.mock]
   }
 ];
 
