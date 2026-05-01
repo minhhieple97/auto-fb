@@ -1,7 +1,7 @@
 import { ConfigService } from "@nestjs/config";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { InMemoryDatabase } from "../src/persistence/in-memory.database.js";
 import { StorageService } from "../src/storage/storage.service.js";
+import { FakeDatabase } from "./fake-database.js";
 import { binaryResponse, jsonResponse } from "./helpers.js";
 
 const s3Mocks = vi.hoisted(() => ({
@@ -28,14 +28,14 @@ describe("StorageService", () => {
   });
 
   it("builds public URLs with a single slash separator", () => {
-    const service = new StorageService(new ConfigService({ R2_PUBLIC_BASE_URL: "https://cdn.example.com/assets/" }), new InMemoryDatabase());
+    const service = new StorageService(new ConfigService({ R2_PUBLIC_BASE_URL: "https://cdn.example.com/assets/" }), new FakeDatabase());
 
     expect(service.publicUrlForKey("campaigns/camp_1/image.png")).toBe("https://cdn.example.com/assets/campaigns/camp_1/image.png");
   });
 
   it("stores remote image metadata locally when R2 is not configured", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(binaryResponse("png", "image/png"));
-    const db = new InMemoryDatabase();
+    const db = new FakeDatabase();
     const service = new StorageService(new ConfigService({ R2_PUBLIC_BASE_URL: "https://cdn.example.com" }), db);
 
     const asset = await service.uploadRemoteImage({ campaignId: "camp_1", sourceUrl: "https://example.com/image.png" });
@@ -50,6 +50,23 @@ describe("StorageService", () => {
     expect(s3Mocks.S3Client).not.toHaveBeenCalled();
   });
 
+  it("allows local image metadata without a public URL when no public base URL is configured", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(binaryResponse("gif", "image/gif"));
+    const db = new FakeDatabase();
+    const service = new StorageService(new ConfigService(), db);
+
+    const asset = await service.uploadRemoteImage({ campaignId: "camp_1", sourceUrl: "https://example.com/image.gif" });
+
+    expect(asset).toMatchObject({
+      campaignId: "camp_1",
+      sourceUrl: "https://example.com/image.gif",
+      mimeType: "image/gif"
+    });
+    expect(asset.publicUrl).toBeUndefined();
+    expect(db.getImageAsset(asset.id)).toEqual(asset);
+    expect(s3Mocks.S3Client).not.toHaveBeenCalled();
+  });
+
   it("uploads to R2 when the full R2 configuration exists", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(binaryResponse("jpeg", "image/jpeg"));
     const service = new StorageService(
@@ -59,7 +76,7 @@ describe("StorageService", () => {
         R2_SECRET_ACCESS_KEY: "secret",
         R2_BUCKET: "bucket_1"
       }),
-      new InMemoryDatabase()
+      new FakeDatabase()
     );
 
     const asset = await service.uploadRemoteImage({ campaignId: "camp_1", sourceUrl: "https://example.com/image.jpg" });
@@ -83,7 +100,7 @@ describe("StorageService", () => {
   });
 
   it("rejects failed or non-image remote responses", async () => {
-    const service = new StorageService(new ConfigService(), new InMemoryDatabase());
+    const service = new StorageService(new ConfigService(), new FakeDatabase());
 
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ error: "missing" }, { status: 404 }));
     await expect(service.uploadRemoteImage({ campaignId: "camp_1", sourceUrl: "https://example.com/missing.png" })).rejects.toThrow(

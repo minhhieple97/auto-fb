@@ -1,20 +1,5 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: auto_fb
-      POSTGRES_PASSWORD: auto_fb
-      POSTGRES_DB: auto_fb
-    ports:
-      - "5432:5432"
-    volumes:
-      - auto_fb_postgres:/var/lib/postgresql/data
-      - ./infra/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
-
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-
-volumes:
-  auto_fb_postgres:

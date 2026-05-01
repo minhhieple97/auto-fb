@@ -1,11 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Campaign, ImageAsset, PostDraft } from "@auto-fb/shared";
-import { InMemoryDatabase } from "../persistence/in-memory.database.js";
+import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 import type { QaResult, UnderstoodContent } from "./agent.types.js";
 
 @Injectable()
 export class ApprovalGateAgent {
-  constructor(@Inject(InMemoryDatabase) private readonly db: InMemoryDatabase) {}
+  constructor(@Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository) {}
 
   async save(input: {
     campaign: Campaign;

@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { ImageAsset } from "@auto-fb/shared";
 import { randomUUID } from "node:crypto";
-import { InMemoryDatabase } from "../persistence/in-memory.database.js";
+import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 
 type UploadImageInput = {
   campaignId: string;
@@ -14,7 +14,7 @@ type UploadImageInput = {
 export class StorageService {
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService,
-    @Inject(InMemoryDatabase) private readonly db: InMemoryDatabase
+    @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository
   ) {}
 
   async uploadRemoteImage(input: UploadImageInput): Promise<ImageAsset> {

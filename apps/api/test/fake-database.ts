@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { NotFoundException } from "@nestjs/common";
 import type {
   AgentRun,
   ApprovalStatus,
@@ -11,21 +11,21 @@ import type {
   ImageAsset,
   PostDraft,
   PublishedPost,
-  PublishStatus,
   Source,
   UpdateCampaignInput
 } from "@auto-fb/shared";
 import { randomUUID } from "node:crypto";
-import { nowIso } from "../common/time.js";
+import { nowIso } from "../src/common/time.js";
+import type {
+  CreateAgentRunInput,
+  CreateContentInput,
+  CreateDraftInput,
+  CreateImageAssetInput,
+  CreatePublishedPostInput,
+  DatabaseRepository
+} from "../src/persistence/database.repository.js";
 
-type CreateContentInput = Omit<ContentItem, "id" | "createdAt">;
-type CreateImageAssetInput = Omit<ImageAsset, "id" | "createdAt">;
-type CreateDraftInput = Omit<PostDraft, "id" | "createdAt" | "updatedAt">;
-type CreateAgentRunInput = Omit<AgentRun, "id" | "createdAt">;
-type CreatePublishedPostInput = Omit<PublishedPost, "id" | "createdAt">;
-
-@Injectable()
-export class InMemoryDatabase {
+export class FakeDatabase implements DatabaseRepository {
   private campaigns = new Map<string, Campaign>();
   private sources = new Map<string, Source>();
   private contentItems = new Map<string, ContentItem>();

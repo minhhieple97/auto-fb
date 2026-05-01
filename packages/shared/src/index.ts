@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export type { CompositeTypes, Database, Enums, Json, Tables, TablesInsert, TablesUpdate } from "./database.types.js";
+
 export const campaignStatusSchema = z.enum(["ACTIVE", "PAUSED", "ARCHIVED"]);
 export const sourceTypeSchema = z.enum(["rss", "api", "static_html"]);
 export const llmProviderSchema = z.enum(["openai", "anthropic", "gemini", "deepseek", "mock"]);

@@ -2,12 +2,12 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Campaign } from "@auto-fb/shared";
 import { contentHash } from "../common/hash.js";
 import type { RawContentItem } from "../collector/content-source.types.js";
-import { InMemoryDatabase } from "../persistence/in-memory.database.js";
+import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 import type { UnderstoodContent } from "./agent.types.js";
 
 @Injectable()
 export class UnderstandingAgent {
-  constructor(@Inject(InMemoryDatabase) private readonly db: InMemoryDatabase) {}
+  constructor(@Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository) {}
 
   async understand(campaign: Campaign, rawItems: RawContentItem[]): Promise<UnderstoodContent> {
     const selected = rawItems[0];
@@ -16,7 +16,7 @@ export class UnderstandingAgent {
     const hash = contentHash(`${selected.title}\n${selected.text}`);
     const summary = summarize(selected.text);
     const keyFacts = extractKeyFacts(selected.text);
-    const { item, duplicate } = this.db.createContentItem({
+    const { item, duplicate } = await this.db.createContentItem({
       campaignId: campaign.id,
       sourceId: selected.sourceId,
       sourceUrl: selected.sourceUrl,

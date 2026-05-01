@@ -1,7 +1,7 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { PostDraft, PublishedPost, PublishOptions } from "@auto-fb/shared";
-import { InMemoryDatabase } from "../persistence/in-memory.database.js";
+import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 
 type PublishPayload = {
   pageId: string;
@@ -15,16 +15,16 @@ type PublishPayload = {
 export class PublisherAgentService {
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService,
-    @Inject(InMemoryDatabase) private readonly db: InMemoryDatabase
+    @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository
   ) {}
 
   async publishDraft(draftId: string, options: PublishOptions = {}): Promise<PublishedPost> {
-    const draft = this.db.getDraft(draftId);
+    const draft = await this.db.getDraft(draftId);
     if (draft.approvalStatus !== "APPROVED") {
       throw new BadRequestException("Draft must be approved before publish");
     }
 
-    const campaign = this.db.getCampaign(draft.campaignId);
+    const campaign = await this.db.getCampaign(draft.campaignId);
     const payload: PublishPayload = {
       pageId: campaign.targetPageId,
       message: draft.text,
@@ -37,7 +37,7 @@ export class PublisherAgentService {
 
     try {
       const facebookPostId = dryRun ? `dry_run_${draft.id}` : await this.publishToMeta(payload, draft);
-      const post = this.db.createPublishedPost({
+      const post = await this.db.createPublishedPost({
         postDraftId: draft.id,
         facebookPageId: campaign.targetPageId,
         facebookPostId,
@@ -45,7 +45,7 @@ export class PublisherAgentService {
         publishPayload: payload,
         publishedAt: new Date().toISOString()
       });
-      this.db.updateDraftStatus(draft.id, "PUBLISHED", "APPROVED");
+      await this.db.updateDraftStatus(draft.id, "PUBLISHED", "APPROVED");
       return post;
     } catch (error) {
       return this.db.createPublishedPost({

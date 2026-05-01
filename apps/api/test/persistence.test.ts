@@ -1,141 +1,294 @@
 import { NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { InMemoryDatabase } from "../src/persistence/in-memory.database.js";
-import { buildCampaignInput, buildSourceInput } from "./helpers.js";
+import { SupabaseDatabase } from "../src/persistence/supabase.database.js";
+import { buildCampaignInput } from "./helpers.js";
 
-describe("InMemoryDatabase", () => {
-  let db: InMemoryDatabase;
+const campaignRow = {
+  id: "camp_1",
+  name: "Launch campaign",
+  topic: "AI operations",
+  language: "vi",
+  brand_voice: "helpful, concise, practical",
+  target_page_id: "page_1",
+  llm_provider: "mock",
+  llm_model: "mock-copywriter-v1",
+  status: "ACTIVE",
+  created_at: "2026-05-01T00:00:00.000Z",
+  updated_at: "2026-05-01T00:00:00.000Z"
+};
 
+const contentRow = {
+  id: "content_1",
+  campaign_id: "camp_1",
+  source_id: "src_1",
+  source_url: "https://example.com/story",
+  title: "Story",
+  raw_text: "Text",
+  summary: "Summary",
+  image_urls: ["https://example.com/image.png"],
+  hash: "hash_1",
+  created_at: "2026-05-01T00:00:00.000Z"
+};
+
+function db() {
+  return new SupabaseDatabase(
+    new ConfigService({
+      SUPABASE_URL: "https://project.supabase.co",
+      SUPABASE_SECRET_KEY: "sb_secret_test"
+    })
+  );
+}
+
+function jsonResponse(payload: unknown, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  headers.set("content-type", "application/json");
+  return new Response(JSON.stringify(payload), { ...init, headers });
+}
+
+describe("SupabaseDatabase", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-01T00:00:00.000Z"));
-    db = new InMemoryDatabase();
   });
 
   afterEach(() => vi.useRealTimers());
 
-  it("creates, lists, gets and updates campaigns without exposing mutable state", () => {
-    const campaign = db.createCampaign(buildCampaignInput());
+  it("maps campaign writes to Supabase REST with server-side headers", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse([campaignRow], { status: 201 }));
 
-    expect(db.listCampaigns()).toHaveLength(1);
-    expect(db.getCampaign(campaign.id)).toMatchObject({ name: "Launch campaign", status: "ACTIVE" });
+    const campaign = await db().createCampaign(buildCampaignInput());
 
-    const mutated = db.getCampaign(campaign.id);
-    mutated.name = "Mutated outside database";
-
-    vi.setSystemTime(new Date("2026-05-01T00:01:00.000Z"));
-    const updated = db.updateCampaign(campaign.id, { status: "PAUSED", topic: "New topic" });
-
-    expect(updated).toMatchObject({ name: "Launch campaign", status: "PAUSED", topic: "New topic" });
-    expect(updated.updatedAt).toBe("2026-05-01T00:01:00.000Z");
+    expect(campaign).toMatchObject({
+      id: "camp_1",
+      brandVoice: "helpful, concise, practical",
+      targetPageId: "page_1",
+      llmProvider: "mock"
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://project.supabase.co/rest/v1/campaigns?select=*",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          apikey: "sb_secret_test",
+          Authorization: "Bearer sb_secret_test",
+          "Content-Profile": "public",
+          Prefer: "return=representation"
+        }),
+        body: expect.stringContaining("\"brand_voice\":\"helpful, concise, practical\"")
+      })
+    );
   });
 
-  it("throws NotFoundException when a campaign or source does not exist", () => {
-    expect(() => db.getCampaign("missing")).toThrow(NotFoundException);
-    expect(() => db.createSource("missing", buildSourceInput())).toThrow(NotFoundException);
-    expect(() => db.getSource("missing")).toThrow(NotFoundException);
+  it("uses custom schemas and service-role fallback keys for Supabase REST calls", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse([campaignRow]));
+    const database = new SupabaseDatabase(
+      new ConfigService({
+        SUPABASE_URL: "https://project.supabase.co/",
+        SUPABASE_SERVICE_ROLE_KEY: "legacy_service_role",
+        SUPABASE_SCHEMA: "app"
+      })
+    );
+
+    await expect(database.listCampaigns()).resolves.toHaveLength(1);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://project.supabase.co/rest/v1/campaigns?select=*&order=created_at.desc",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          apikey: "legacy_service_role",
+          Authorization: "Bearer legacy_service_role",
+          "Accept-Profile": "app",
+          "Content-Profile": "app"
+        })
+      })
+    );
   });
 
-  it("stores sources per campaign", () => {
-    const firstCampaign = db.createCampaign(buildCampaignInput({ name: "First" }));
-    const secondCampaign = db.createCampaign(buildCampaignInput({ name: "Second" }));
-    const firstSource = db.createSource(firstCampaign.id, buildSourceInput({ url: "https://example.com/first" }));
-    db.createSource(secondCampaign.id, buildSourceInput({ url: "https://example.com/second" }));
+  it("patches only supplied campaign fields during updates", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse([{ ...campaignRow, brand_voice: "direct", status: "PAUSED" }]));
 
-    expect(db.listSources(firstCampaign.id)).toEqual([firstSource]);
+    const campaign = await db().updateCampaign("camp_1", { brandVoice: "direct", status: "PAUSED" });
+
+    expect(campaign).toMatchObject({ brandVoice: "direct", status: "PAUSED" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://project.supabase.co/rest/v1/campaigns?select=*&id=eq.camp_1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          updated_at: "2026-05-01T00:00:00.000Z",
+          brand_voice: "direct",
+          status: "PAUSED"
+        })
+      })
+    );
   });
 
-  it("deduplicates content by campaign and hash only", () => {
-    const firstCampaign = db.createCampaign(buildCampaignInput({ name: "First" }));
-    const secondCampaign = db.createCampaign(buildCampaignInput({ name: "Second" }));
-    const input = {
-      campaignId: firstCampaign.id,
-      sourceId: "src_1",
-      sourceUrl: "https://example.com/story",
-      title: "Story",
-      rawText: "Text",
-      summary: "Text",
-      imageUrls: [],
-      hash: "hash_1"
-    };
+  it("throws NotFoundException when a selected row is missing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse([]));
 
-    const created = db.createContentItem(input);
-    const duplicate = db.createContentItem(input);
-    const otherCampaign = db.createContentItem({ ...input, campaignId: secondCampaign.id });
-
-    expect(created.duplicate).toBe(false);
-    expect(duplicate).toMatchObject({ duplicate: true, item: { id: created.item.id } });
-    expect(otherCampaign.duplicate).toBe(false);
-    expect(db.hasContentHash(firstCampaign.id, "hash_1")).toBe(true);
+    await expect(db().getCampaign("missing")).rejects.toThrow(NotFoundException);
   });
 
-  it("hydrates drafts with content and image assets", () => {
-    const campaign = db.createCampaign(buildCampaignInput());
-    const content = db.createContentItem({
-      campaignId: campaign.id,
+  it("throws NotFoundException when an update returns no rows", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse([]));
+
+    await expect(db().updateCampaign("missing", { status: "PAUSED" })).rejects.toThrow(NotFoundException);
+  });
+
+  it("hydrates joined draft rows with content and image assets", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse([
+        {
+          id: "draft_1",
+          campaign_id: "camp_1",
+          content_item_id: "content_1",
+          image_asset_id: "image_1",
+          text: "Draft",
+          status: "PENDING_APPROVAL",
+          risk_score: 25,
+          risk_flags: ["flag"],
+          approval_status: "PENDING",
+          created_at: "2026-05-01T00:00:00.000Z",
+          updated_at: "2026-05-01T00:00:00.000Z",
+          content_items: contentRow,
+          image_assets: {
+            id: "image_1",
+            campaign_id: "camp_1",
+            source_url: "https://example.com/image.png",
+            r2_key: "campaigns/camp_1/image.png",
+            public_url: "https://cdn.example.com/image.png",
+            mime_type: "image/png",
+            created_at: "2026-05-01T00:00:00.000Z"
+          }
+        }
+      ])
+    );
+
+    const drafts = await db().listDrafts("PENDING_APPROVAL");
+
+    expect(drafts).toEqual([
+      expect.objectContaining({
+        id: "draft_1",
+        contentItem: expect.objectContaining({ id: "content_1", rawText: "Text" }),
+        imageAsset: expect.objectContaining({ id: "image_1", publicUrl: "https://cdn.example.com/image.png" })
+      })
+    ]);
+  });
+
+  it("rejects Supabase JSON list fields that do not match shared DTO arrays", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse([{ ...contentRow, image_urls: ["ok", 42] }]));
+
+    await expect(db().listContentItems("camp_1")).rejects.toThrow("Supabase content_items.image_urls must be a string array");
+  });
+
+  it("returns the existing content item when Supabase reports a unique hash conflict", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ code: "23505", message: "duplicate key value violates unique constraint" }, { status: 409 }))
+      .mockResolvedValueOnce(jsonResponse([contentRow]));
+
+    const result = await db().createContentItem({
+      campaignId: "camp_1",
       sourceId: "src_1",
       sourceUrl: "https://example.com/story",
       title: "Story",
       rawText: "Text",
       summary: "Summary",
-      imageUrls: ["https://example.com/image.png"],
+      imageUrls: [],
       hash: "hash_1"
-    }).item;
-    const image = db.createImageAsset({
-      campaignId: campaign.id,
-      sourceUrl: "https://example.com/image.png",
-      r2Key: "campaigns/camp_1/image.png",
-      publicUrl: "https://cdn.example.com/image.png",
-      mimeType: "image/png"
     });
 
-    const draft = db.createDraft({
-      campaignId: campaign.id,
-      contentItemId: content.id,
-      imageAssetId: image.id,
-      text: "Draft",
-      status: "PENDING_APPROVAL",
-      riskScore: 25,
-      riskFlags: ["flag"],
-      approvalStatus: "PENDING"
-    });
-
-    expect(draft.contentItem).toMatchObject({ id: content.id });
-    expect(draft.imageAsset).toMatchObject({ id: image.id });
-    expect(db.updateDraftStatus(draft.id, "APPROVED", "APPROVED")).toMatchObject({
-      status: "APPROVED",
-      approvalStatus: "APPROVED",
-      contentItem: { id: content.id },
-      imageAsset: { id: image.id }
-    });
+    expect(result).toMatchObject({ duplicate: true, item: { id: "content_1" } });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://project.supabase.co/rest/v1/content_items?select=*&campaign_id=eq.camp_1&hash=eq.hash_1&limit=1"
+    );
   });
 
-  it("records published posts and agent runs, then clears all collections", () => {
-    const campaign = db.createCampaign(buildCampaignInput());
-    const post = db.createPublishedPost({
-      postDraftId: "draft_1",
-      facebookPageId: "page_1",
-      facebookPostId: "fb_1",
-      status: "PUBLISHED",
-      publishPayload: { message: "hello" },
-      publishedAt: "2026-05-01T00:00:00.000Z"
-    });
-    const run = db.addAgentRun({
-      campaignId: campaign.id,
-      graphRunId: "graph_1",
-      nodeName: "load_campaign",
-      inputJson: {},
-      outputJson: {},
-      status: "SUCCESS"
-    });
+  it("rethrows a unique hash conflict when the existing row cannot be loaded", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ code: "23505", message: "duplicate key value violates unique constraint" }, { status: 409 }))
+      .mockResolvedValueOnce(jsonResponse([]));
 
-    expect(db.listPublishedPosts()).toEqual([post]);
-    expect(db.listAgentRuns(campaign.id)).toEqual([run]);
+    await expect(
+      db().createContentItem({
+        campaignId: "camp_1",
+        sourceId: "src_1",
+        sourceUrl: "https://example.com/story",
+        title: "Story",
+        rawText: "Text",
+        summary: "Summary",
+        imageUrls: [],
+        hash: "hash_1"
+      })
+    ).rejects.toThrow("duplicate key value violates unique constraint");
+  });
 
-    db.clear();
+  it("maps published posts and agent runs from snake_case rows", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "post_1",
+            post_draft_id: "draft_1",
+            facebook_page_id: "page_1",
+            facebook_post_id: null,
+            status: "FAILED",
+            publish_payload: { draftId: "draft_1" },
+            error_message: "Meta rejected post",
+            published_at: null,
+            created_at: "2026-05-01T00:00:00.000Z"
+          }
+        ])
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "run_1",
+            campaign_id: "camp_1",
+            graph_run_id: "graph_1",
+            node_name: "qa_check",
+            input_json: { node: "qa_check" },
+            output_json: { riskScore: 25 },
+            status: "FAILED",
+            error_message: "QA unavailable",
+            created_at: "2026-05-01T00:00:00.000Z"
+          }
+        ])
+      );
 
-    expect(db.listCampaigns()).toEqual([]);
-    expect(db.listPublishedPosts()).toEqual([]);
-    expect(db.listAgentRuns()).toEqual([]);
+    await expect(db().listPublishedPosts()).resolves.toEqual([
+      {
+        id: "post_1",
+        postDraftId: "draft_1",
+        facebookPageId: "page_1",
+        status: "FAILED",
+        publishPayload: { draftId: "draft_1" },
+        errorMessage: "Meta rejected post",
+        createdAt: "2026-05-01T00:00:00.000Z"
+      }
+    ]);
+    await expect(db().listAgentRuns("camp_1")).resolves.toEqual([
+      {
+        id: "run_1",
+        campaignId: "camp_1",
+        graphRunId: "graph_1",
+        nodeName: "qa_check",
+        inputJson: { node: "qa_check" },
+        outputJson: { riskScore: 25 },
+        status: "FAILED",
+        errorMessage: "QA unavailable",
+        createdAt: "2026-05-01T00:00:00.000Z"
+      }
+    ]);
+  });
+
+  it("wraps fetch failures with a Supabase request error", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("network down"));
+
+    await expect(db().listCampaigns()).rejects.toThrow("Supabase request failed: network down");
   });
 });

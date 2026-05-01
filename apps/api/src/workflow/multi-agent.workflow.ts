@@ -9,7 +9,7 @@ import { ImageAgent } from "../agents/image.agent.js";
 import { QaComplianceAgent } from "../agents/qa-compliance.agent.js";
 import { SourceDiscoveryAgent } from "../agents/source-discovery.agent.js";
 import { UnderstandingAgent } from "../agents/understanding.agent.js";
-import { InMemoryDatabase } from "../persistence/in-memory.database.js";
+import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 
 const WorkflowAnnotation = Annotation.Root({
   campaignId: Annotation<string>(),
@@ -27,7 +27,7 @@ const WorkflowAnnotation = Annotation.Root({
 @Injectable()
 export class MultiAgentWorkflow {
   constructor(
-    @Inject(InMemoryDatabase) private readonly db: InMemoryDatabase,
+    @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository,
     @Inject(SourceDiscoveryAgent) private readonly sourceDiscoveryAgent: SourceDiscoveryAgent,
     @Inject(CollectorAgent) private readonly collectorAgent: CollectorAgent,
     @Inject(UnderstandingAgent) private readonly understandingAgent: UnderstandingAgent,
@@ -42,7 +42,7 @@ export class MultiAgentWorkflow {
     const graph = new StateGraph(WorkflowAnnotation)
       .addNode("load_campaign", (state) =>
         this.runNode("load_campaign", state, async () => ({
-          campaign: this.db.getCampaign(state.campaignId)
+          campaign: await this.db.getCampaign(state.campaignId)
         }))
       )
       .addNode("discover_sources", (state) =>
@@ -125,7 +125,7 @@ export class MultiAgentWorkflow {
   ): Promise<Partial<WorkflowState>> {
     try {
       const output = await handler();
-      this.db.addAgentRun({
+      await this.db.addAgentRun({
         campaignId: state.campaignId,
         graphRunId: state.graphRunId,
         nodeName,
@@ -135,7 +135,7 @@ export class MultiAgentWorkflow {
       });
       return output;
     } catch (error) {
-      this.db.addAgentRun({
+      await this.db.addAgentRun({
         campaignId: state.campaignId,
         graphRunId: state.graphRunId,
         nodeName,

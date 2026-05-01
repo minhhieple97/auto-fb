@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { MultiAgentWorkflow } from "../src/workflow/multi-agent.workflow.js";
-import { InMemoryDatabase } from "../src/persistence/in-memory.database.js";
+import { FakeDatabase } from "./fake-database.js";
 import { buildCampaignInput, buildContentItem, buildImageAsset, buildPostDraft, buildRawItem, buildSource, buildUnderstood } from "./helpers.js";
 
 function createWorkflowHarness(overrides: Partial<Record<string, unknown>> = {}) {
-  const db = new InMemoryDatabase();
+  const db = new FakeDatabase();
   const campaign = db.createCampaign(buildCampaignInput());
   const source = buildSource({ campaignId: campaign.id });
   const contentItem = buildContentItem({ campaignId: campaign.id });

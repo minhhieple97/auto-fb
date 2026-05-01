@@ -6,7 +6,6 @@ import { RssAdapter } from "../src/collector/rss.adapter.js";
 import { StaticHtmlAdapter } from "../src/collector/static-html.adapter.js";
 import { providerDefinitions } from "../src/llm/provider-registry.js";
 import { LlmService } from "../src/llm/llm.service.js";
-import { InMemoryDatabase } from "../src/persistence/in-memory.database.js";
 import { PublisherAgentService } from "../src/publishing/publisher-agent.service.js";
 import { StorageService } from "../src/storage/storage.service.js";
 import { MultiAgentWorkflow } from "../src/workflow/multi-agent.workflow.js";
@@ -18,6 +17,7 @@ import { CopywritingAgent } from "../src/agents/copywriting.agent.js";
 import { ImageAgent } from "../src/agents/image.agent.js";
 import { QaComplianceAgent } from "../src/agents/qa-compliance.agent.js";
 import { ApprovalGateAgent } from "../src/agents/approval-gate.agent.js";
+import { FakeDatabase } from "./fake-database.js";
 
 function jsonResponse(payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
@@ -103,13 +103,13 @@ describe("dedupe and providers", () => {
 
 describe("storage and publisher", () => {
   it("builds R2 public URLs", () => {
-    const db = new InMemoryDatabase();
+    const db = new FakeDatabase();
     const storage = new StorageService(new ConfigService({ R2_PUBLIC_BASE_URL: "https://cdn.example.com/assets" }), db);
     expect(storage.publicUrlForKey("campaigns/a/image.jpg")).toBe("https://cdn.example.com/assets/campaigns/a/image.jpg");
   });
 
   it("publishes approved drafts in dry-run mode", async () => {
-    const db = new InMemoryDatabase();
+    const db = new FakeDatabase();
     const config = new ConfigService({ PUBLISH_DRY_RUN: "true" });
     const campaign = db.createCampaign({
       name: "Campaign",
@@ -159,7 +159,7 @@ describe("multi-agent workflow", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       jsonResponse([{ url: "https://example.com/a", title: "AI tools", text: "AI tools help teams save time. Teams should verify sources." }])
     );
-    const db = new InMemoryDatabase();
+    const db = new FakeDatabase();
     const config = new ConfigService({ NODE_ENV: "test" });
     const campaign = db.createCampaign({
       name: "Campaign",
