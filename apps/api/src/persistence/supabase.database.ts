@@ -326,9 +326,10 @@ export class SupabaseDatabase implements DatabaseRepository {
       id: randomUUID(),
       campaign_id: campaignId,
       type: input.type,
-      url: input.url,
+      url: input.url ?? "",
       crawl_policy: input.crawlPolicy,
       enabled: input.enabled,
+      metadata: input.metadata ? toJson(input.metadata, "sources.metadata") : null,
       created_at: nowIso()
     });
     return toSource(row);
@@ -876,7 +877,10 @@ function toSource(row: SourceRow): Source {
     url: row.url,
     crawlPolicy: row.crawl_policy,
     enabled: row.enabled,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    ...(row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? { metadata: row.metadata as Record<string, unknown> }
+      : {})
   };
 }
 

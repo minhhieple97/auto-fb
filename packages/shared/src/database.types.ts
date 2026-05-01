@@ -470,6 +470,7 @@ export type Database = {
           created_at: string
           enabled: boolean
           id: string
+          metadata: Json | null
           type: string
           url: string
         }
@@ -479,6 +480,7 @@ export type Database = {
           created_at: string
           enabled?: boolean
           id?: string
+          metadata?: Json | null
           type: string
           url: string
         }
@@ -488,6 +490,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          metadata?: Json | null
           type?: string
           url?: string
         }

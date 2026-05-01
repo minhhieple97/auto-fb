@@ -63,10 +63,11 @@ CREATE TABLE IF NOT EXISTS facebook_pages (
 CREATE TABLE IF NOT EXISTS sources (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('rss', 'api', 'static_html')),
+  type TEXT NOT NULL CHECK (type IN ('rss', 'api', 'static_html', 'curl', 'gemini_search')),
   url TEXT NOT NULL,
   crawl_policy TEXT NOT NULL,
   enabled BOOLEAN NOT NULL DEFAULT true,
+  metadata JSONB DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL
 );
 

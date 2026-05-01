@@ -1,14 +1,15 @@
 import { Injectable } from "@nestjs/common";
-import { sourceDefaults, type Source } from "@auto-fb/shared";
+import { sourceDefaults, sourceTypes, type Source } from "@auto-fb/shared";
 import { ApiAdapter } from "./api.adapter.js";
 import { allowedSourceProtocols } from "./collector.constants.js";
 import type { RawContentItem, SourceAdapter } from "./content-source.types.js";
+import { CurlAdapter } from "./curl.adapter.js";
 import { RssAdapter } from "./rss.adapter.js";
 import { StaticHtmlAdapter } from "./static-html.adapter.js";
 
 @Injectable()
 export class CollectorService {
-  private readonly adapters: SourceAdapter[] = [new RssAdapter(), new ApiAdapter(), new StaticHtmlAdapter()];
+  private readonly adapters: SourceAdapter[] = [new RssAdapter(), new ApiAdapter(), new StaticHtmlAdapter(), new CurlAdapter()];
 
   async collect(sources: Source[]): Promise<RawContentItem[]> {
     const enabledSources = sources.filter((source) => source.enabled);
@@ -28,6 +29,9 @@ export class CollectorService {
 }
 
 function assertWhitelistedSource(source: Source): void {
+  if (source.type === sourceTypes.curl || source.type === sourceTypes.geminiSearch) {
+    return;
+  }
   if (source.crawlPolicy !== sourceDefaults.crawlPolicy) {
     throw new Error(`Unsupported crawl policy ${source.crawlPolicy}`);
   }

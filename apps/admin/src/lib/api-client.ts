@@ -9,8 +9,10 @@ import type {
   AdminProfile,
   Campaign,
   CreateCampaignInput,
+  CreateCurlSourceInput,
   CreateFanpageInput,
   CreateSourceInput,
+  CreateSourcesFromSearchInput,
   Fanpage,
   GenerateFromSearchInput,
   GenerateFromSearchResponse,
@@ -18,6 +20,8 @@ import type {
   PublishOptions,
   PublishedPost,
   Source,
+  SourceSearchInput,
+  SourceSearchResponse,
   TestFanpageConnectionResponse,
   UpdateFanpageInput,
   UpdateFanpageScheduleInput,
@@ -161,6 +165,12 @@ export const api = {
   fanpageSources: (fanpageId: string) => request<Source[]>(apiEndpoints.fanpageSources(fanpageId)),
   createFanpageSource: (fanpageId: string, input: CreateSourceInput) =>
     request<Source>(apiEndpoints.fanpageSources(fanpageId), { method: "POST", body: JSON.stringify(input) }),
+  createCurlSource: (fanpageId: string, input: CreateCurlSourceInput) =>
+    request<Source>(apiEndpoints.fanpageCurlSource(fanpageId), { method: "POST", body: JSON.stringify(input) }),
+  searchSources: (fanpageId: string, input: SourceSearchInput) =>
+    request<SourceSearchResponse>(apiEndpoints.fanpageSearchSources(fanpageId), { method: "POST", body: JSON.stringify(input) }),
+  addSearchSources: (fanpageId: string, input: CreateSourcesFromSearchInput) =>
+    request<Source[]>(apiEndpoints.fanpageSearchSourcesAdd(fanpageId), { method: "POST", body: JSON.stringify(input) }),
   searchAgent: (campaignId: string, input: AgentSearchInput) =>
     request<AgentSearchResponse>(apiEndpoints.campaignAgentSearch(campaignId), { method: "POST", body: JSON.stringify(input) }),
   generateFromSearch: (campaignId: string, input: GenerateFromSearchInput) =>

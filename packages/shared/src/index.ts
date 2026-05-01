@@ -18,9 +18,11 @@ export const fanpageEnvironmentValues = [fanpageEnvironments.sandbox, fanpageEnv
 export const sourceTypes = {
   rss: "rss",
   api: "api",
-  staticHtml: "static_html"
+  staticHtml: "static_html",
+  curl: "curl",
+  geminiSearch: "gemini_search"
 } as const;
-export const sourceTypeValues = [sourceTypes.rss, sourceTypes.api, sourceTypes.staticHtml] as const;
+export const sourceTypeValues = [sourceTypes.rss, sourceTypes.api, sourceTypes.staticHtml, sourceTypes.curl, sourceTypes.geminiSearch] as const;
 
 export const llmProviders = {
   openai: "openai",
@@ -107,6 +109,7 @@ export const apiPathSegments = {
   approve: "approve",
   auth: "auth",
   campaigns: "campaigns",
+  curlSource: "curl-source",
   drafts: "drafts",
   fanpages: "fanpages",
   me: "me",
@@ -117,6 +120,8 @@ export const apiPathSegments = {
   schedule: "schedule",
   generate: "generate",
   search: "search",
+  searchSources: "search-sources",
+  searchSourcesAdd: "search-sources-add",
   sources: "sources",
   stream: "stream",
   testConnection: "test-connection",
@@ -163,6 +168,12 @@ export const agentSearchResultLimits = {
   default: 10,
   min: 1,
   max: 20
+} as const;
+
+export const sourceSearchResultLimits = {
+  default: 10,
+  min: 1,
+  max: 50
 } as const;
 
 export const postDraftRiskScoreLimits = {
@@ -374,18 +385,25 @@ export const sourceSchema = z.object({
   id: z.string(),
   campaignId: z.string(),
   type: sourceTypeSchema,
-  url: z.string().url(),
+  url: z.string(),
   crawlPolicy: z.string(),
   enabled: z.boolean(),
-  createdAt: z.string()
+  createdAt: z.string(),
+  metadata: z.record(z.unknown()).optional()
 });
 
 export const createSourceSchema = z.object({
   type: sourceTypeSchema,
-  url: z.string().url(),
+  url: z.string().url().optional().default(""),
   crawlPolicy: z.string().default(sourceDefaults.crawlPolicy),
-  enabled: z.boolean().default(sourceDefaults.enabled)
+  enabled: z.boolean().default(sourceDefaults.enabled),
+  metadata: z.record(z.unknown()).optional()
 });
+
+export const createCurlSourceInputSchema = z.object({
+  curlCommand: z.string().trim().min(5)
+});
+
 
 export const imageAssetSchema = z.object({
   id: z.string(),
@@ -492,6 +510,25 @@ export const agentSearchResultSchema = z.object({
   sourceName: z.string().optional()
 });
 
+export const sourceSearchInputSchema = z.object({
+  query: z.string().trim().min(2),
+  limit: z
+    .number()
+    .int()
+    .min(sourceSearchResultLimits.min)
+    .max(sourceSearchResultLimits.max)
+    .default(sourceSearchResultLimits.default)
+});
+
+export const sourceSearchResponseSchema = z.object({
+  query: z.string(),
+  results: z.array(agentSearchResultSchema)
+});
+
+export const createSourcesFromSearchInputSchema = z.object({
+  selectedResults: z.array(agentSearchResultSchema).min(1).max(sourceSearchResultLimits.max)
+});
+
 export const agentSearchInputSchema = z.object({
   query: z.string().trim().min(2),
   limit: z
@@ -539,6 +576,10 @@ export type UpdateFanpageTokenInput = z.infer<typeof updateFanpageTokenSchema>;
 export type TestFanpageConnectionResponse = z.infer<typeof testFanpageConnectionResponseSchema>;
 export type Source = z.infer<typeof sourceSchema>;
 export type CreateSourceInput = z.infer<typeof createSourceSchema>;
+export type CreateCurlSourceInput = z.infer<typeof createCurlSourceInputSchema>;
+export type SourceSearchInput = z.infer<typeof sourceSearchInputSchema>;
+export type SourceSearchResponse = z.infer<typeof sourceSearchResponseSchema>;
+export type CreateSourcesFromSearchInput = z.infer<typeof createSourcesFromSearchInputSchema>;
 export type ImageAsset = z.infer<typeof imageAssetSchema>;
 export type ContentItem = z.infer<typeof contentItemSchema>;
 export type PostDraft = z.infer<typeof postDraftSchema>;
