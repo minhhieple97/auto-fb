@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PostDraft } from "@auto-fb/shared";
 import { Check, Trash2 } from "lucide-react";
+import { queryKeys } from "../../app/query-keys.js";
 import { api } from "../../lib/api-client.js";
 
 type DraftInboxProps = {
@@ -14,8 +15,8 @@ export function DraftInbox({ drafts, onChanged }: DraftInboxProps) {
     mutationFn: api.approveDraft,
     onSuccess: () =>
       Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["drafts"] }),
-        queryClient.invalidateQueries({ queryKey: ["published-posts"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.publishedPosts }),
         onChanged()
       ])
   });
@@ -23,8 +24,8 @@ export function DraftInbox({ drafts, onChanged }: DraftInboxProps) {
     mutationFn: api.rejectDraft,
     onSuccess: () =>
       Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["drafts"] }),
-        queryClient.invalidateQueries({ queryKey: ["published-posts"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.publishedPosts }),
         onChanged()
       ])
   });

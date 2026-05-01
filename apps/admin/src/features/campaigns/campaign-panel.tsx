@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { llmProviderSchema, type CreateCampaignInput, type LlmProvider } from "@auto-fb/shared";
+import { campaignDefaults, llmProviderSchema, llmProviders, type CreateCampaignInput, type LlmProvider } from "@auto-fb/shared";
 import { ListChecks, Plus } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "../../components/ui/input.js";
 import { Select } from "../../components/ui/select.js";
 import { Textarea } from "../../components/ui/textarea.js";
+import { queryKeys } from "../../app/query-keys.js";
 import { api } from "../../lib/api-client.js";
 import { providerModels } from "./provider-models.js";
 
@@ -31,20 +32,20 @@ const campaignFormSchema = z.object({
 const campaignDefaultValues: CreateCampaignInput = {
   name: "",
   topic: "",
-  language: "vi",
-  brandVoice: "helpful, concise, practical",
+  language: campaignDefaults.language,
+  brandVoice: campaignDefaults.brandVoice,
   targetPageId: "",
-  llmProvider: "openai",
-  llmModel: providerModels.openai[0] ?? "gpt-4o-mini"
+  llmProvider: campaignDefaults.llmProvider,
+  llmModel: providerModels[llmProviders.openai][0] ?? campaignDefaults.llmModel
 };
 
 function firstModelForProvider(provider: LlmProvider) {
-  return providerModels[provider]?.[0] ?? providerModels.openai[0] ?? "gpt-4o-mini";
+  return providerModels[provider]?.[0] ?? providerModels[llmProviders.openai][0] ?? campaignDefaults.llmModel;
 }
 
 export function CampaignPanel({ selectedCampaignId, onSelect, onCreated }: CampaignPanelProps) {
   const queryClient = useQueryClient();
-  const campaigns = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
+  const campaigns = useQuery({ queryKey: queryKeys.campaigns, queryFn: api.campaigns });
   const form = useForm<CreateCampaignInput>({
     resolver: zodResolver(campaignFormSchema),
     defaultValues: campaignDefaultValues
@@ -52,13 +53,13 @@ export function CampaignPanel({ selectedCampaignId, onSelect, onCreated }: Campa
   const createCampaign = useMutation({
     mutationFn: api.createCampaign,
     onSuccess: async (campaign) => {
-      await queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.campaigns });
       onCreated(campaign.id);
     }
   });
 
   const provider = form.watch("llmProvider");
-  const models = providerModels[provider] ?? providerModels.openai;
+  const models = providerModels[provider] ?? providerModels[llmProviders.openai];
 
   function submit(values: CreateCampaignInput) {
     createCampaign.mutate(values);

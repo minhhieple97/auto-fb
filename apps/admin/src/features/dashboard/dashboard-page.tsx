@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useAdminStore } from "../../app/admin.store.js";
+import { queryKeys } from "../../app/query-keys.js";
 import { invalidateDashboardData } from "../../app/query-invalidation.js";
+import { adminRoutes } from "../../app/routes.js";
 import { AgentTimeline } from "../agent-runs/agent-timeline.js";
 import { CampaignPanel } from "../campaigns/campaign-panel.js";
 import { DraftInbox } from "../drafts/draft-inbox.js";
@@ -16,19 +18,19 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
   const selectedCampaignId = useAdminStore((state) => state.selectedCampaignId);
   const setSelectedCampaignId = useAdminStore((state) => state.setSelectedCampaignId);
-  const campaigns = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
+  const campaigns = useQuery({ queryKey: queryKeys.campaigns, queryFn: api.campaigns });
   const sources = useQuery({
-    queryKey: ["sources", selectedCampaignId],
+    queryKey: queryKeys.sources(selectedCampaignId),
     queryFn: () => api.sources(selectedCampaignId!),
     enabled: Boolean(selectedCampaignId)
   });
-  const drafts = useQuery({ queryKey: ["drafts"], queryFn: api.drafts });
+  const drafts = useQuery({ queryKey: queryKeys.drafts, queryFn: api.drafts });
   const agentRuns = useQuery({
-    queryKey: ["agent-runs", selectedCampaignId],
+    queryKey: queryKeys.agentRuns(selectedCampaignId),
     queryFn: () => api.agentRuns({ campaignId: selectedCampaignId }),
     enabled: Boolean(selectedCampaignId)
   });
-  const publishedPosts = useQuery({ queryKey: ["published-posts"], queryFn: api.publishedPosts });
+  const publishedPosts = useQuery({ queryKey: queryKeys.publishedPosts, queryFn: api.publishedPosts });
 
   useEffect(() => {
     if (!selectedCampaignId && campaigns.data?.[0]) {
@@ -48,7 +50,7 @@ export function DashboardPage() {
       <section className="space-y-4">
         <CampaignRunPanel campaignId={selectedCampaignId} />
         <DraftInbox drafts={drafts.data ?? []} onChanged={refreshDashboard} />
-        <AgentTimeline runs={agentRuns.data ?? []} onOpenDetails={() => navigate("/agent-runs")} />
+        <AgentTimeline runs={agentRuns.data ?? []} onOpenDetails={() => navigate(adminRoutes.agentRuns)} />
         <PublishedHistory posts={publishedPosts.data ?? []} />
       </section>
     </div>

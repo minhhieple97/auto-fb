@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../app/auth-provider.js";
 import { invalidateRouteData } from "../../app/query-invalidation.js";
+import { adminRoutes } from "../../app/routes.js";
 
 export function AdminHeader() {
   const queryClient = useQueryClient();
@@ -26,10 +27,10 @@ export function AdminHeader() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <nav className="flex rounded-md border border-line bg-slate-50 p-1" aria-label="Admin navigation">
-            <NavButton to="/" end icon={<LayoutDashboard size={16} />}>
+            <NavButton to={adminRoutes.dashboard} end icon={<LayoutDashboard size={16} />}>
               Dashboard
             </NavButton>
-            <NavButton to="/agent-runs" icon={<Bot size={16} />}>
+            <NavButton to={adminRoutes.agentRuns} icon={<Bot size={16} />}>
               Agent runs
             </NavButton>
           </nav>
