@@ -7,13 +7,25 @@ import type {
   PublishedPost,
   Source
 } from "@auto-fb/shared";
+import { getAuthAccessToken } from "./supabase.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  const accessToken = getAuthAccessToken();
+
+  if (!headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+
+  if (accessToken && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${accessToken}`);
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
-    ...init
+    ...init,
+    headers
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => undefined)) as { message?: string } | undefined;

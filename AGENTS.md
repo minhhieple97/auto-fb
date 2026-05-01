@@ -27,3 +27,6 @@
 - Mock `apps/admin/src/lib/api-client.ts` in component tests instead of requiring the backend.
 - Keep React Query tests wrapped in a test `QueryClientProvider` with retries disabled.
 - Use the existing Tailwind utility style and compact operational dashboard layout.
+- Admin authentication is Supabase-based. Use `apps/admin/src/app/auth-provider.tsx` and `apps/admin/src/lib/supabase.ts` for session state, login/logout, and API bearer-token propagation; do not read Supabase session state directly inside feature panels.
+- Frontend Supabase configuration must use Vite public values only: `VITE_SUPABASE_URL` plus `VITE_SUPABASE_PUBLISHABLE_KEY` or legacy `VITE_SUPABASE_ANON_KEY`. Never expose a Supabase service-role or secret key in `apps/admin`.
+- Treat the admin auth gate and server-side authorization as separate concerns. The admin app may forward Supabase JWTs, but API endpoints must validate those JWTs before trusting identity or permissions.
