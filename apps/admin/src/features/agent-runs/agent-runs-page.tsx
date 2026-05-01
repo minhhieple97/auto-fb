@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AgentRun, AgentWorkflowRunDetail } from "@auto-fb/shared";
@@ -14,9 +14,7 @@ export function AgentRunsPage() {
   const queryClient = useQueryClient();
   const selectedCampaignId = useAdminStore((state) => state.selectedCampaignId);
   const setSelectedCampaignId = useAdminStore((state) => state.setSelectedCampaignId);
-  const [selectedGraphRunId, setSelectedGraphRunId] = useState<string>();
-  const [selectedStepId, setSelectedStepId] = useState<string>();
-  const [streamError, setStreamError] = useState<string>();
+  const [{ selectedGraphRunId, selectedStepId, streamError }, dispatch] = useReducer(agentRunsPageReducer, initialAgentRunsPageState);
   const workflowQueryKey = useMemo(() => ["agent-workflow-runs", selectedCampaignId ?? "all"] as const, [selectedCampaignId]);
 
   const campaigns = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
@@ -28,10 +26,10 @@ export function AgentRunsPage() {
   useEffect(() => {
     const firstRun = workflowRuns.data?.[0];
     if (!selectedGraphRunId && firstRun) {
-      setSelectedGraphRunId(firstRun.graphRunId);
+      dispatch({ graphRunId: firstRun.graphRunId, type: "selectRun" });
     }
     if (selectedGraphRunId && workflowRuns.data && !workflowRuns.data.some((run) => run.graphRunId === selectedGraphRunId)) {
-      setSelectedGraphRunId(firstRun?.graphRunId);
+      dispatch({ graphRunId: firstRun?.graphRunId, type: "selectRun" });
     }
   }, [selectedGraphRunId, workflowRuns.data]);
 
@@ -41,10 +39,10 @@ export function AgentRunsPage() {
   useEffect(() => {
     const preferredStep = orderedSteps.find((step) => step.status === "RUNNING") ?? orderedSteps[0];
     if (!selectedStepId && preferredStep) {
-      setSelectedStepId(preferredStep.id);
+      dispatch({ stepId: preferredStep.id, type: "selectStep" });
     }
     if (selectedStepId && !orderedSteps.some((step) => step.id === selectedStepId)) {
-      setSelectedStepId(preferredStep?.id);
+      dispatch({ stepId: preferredStep?.id, type: "selectStep" });
     }
   }, [orderedSteps, selectedStepId]);
 
@@ -52,15 +50,15 @@ export function AgentRunsPage() {
   const counters = useMemo(() => summarizeRuns(workflowRuns.data ?? []), [workflowRuns.data]);
 
   useEffect(() => {
-    setStreamError(undefined);
+    dispatch({ type: "streamStarted" });
     return api.streamAgentWorkflowRuns({
       ...(selectedCampaignId ? { campaignId: selectedCampaignId } : {}),
       onEvent: (event) => {
         queryClient.setQueryData<AgentWorkflowRunDetail[]>(workflowQueryKey, (current = []) => upsertWorkflowRun(current, event.run));
         queryClient.invalidateQueries({ queryKey: ["agent-runs"] });
-        setSelectedGraphRunId((current) => current ?? event.run.graphRunId);
+        dispatch({ graphRunId: event.run.graphRunId, type: "streamEvent" });
       },
-      onError: (error) => setStreamError(error.message)
+      onError: (error) => dispatch({ message: error.message, type: "streamFailed" })
     });
   }, [queryClient, selectedCampaignId, workflowQueryKey]);
 
@@ -94,7 +92,7 @@ export function AgentRunsPage() {
           campaignId={selectedCampaignId}
           onRunCreated={(run) => {
             queryClient.setQueryData<AgentWorkflowRunDetail[]>(workflowQueryKey, (current = []) => upsertWorkflowRun(current, run));
-            setSelectedGraphRunId(run.graphRunId);
+            dispatch({ graphRunId: run.graphRunId, type: "selectRun" });
           }}
         />
 
@@ -119,7 +117,7 @@ export function AgentRunsPage() {
                   run.graphRunId === selectedGraphRunId ? "border-action bg-emerald-50" : "border-line bg-white"
                 }`}
                 key={run.graphRunId}
-                onClick={() => setSelectedGraphRunId(run.graphRunId)}
+                onClick={() => dispatch({ graphRunId: run.graphRunId, type: "selectRun" })}
                 type="button"
               >
                 <div className="flex items-center justify-between gap-2">
@@ -136,7 +134,7 @@ export function AgentRunsPage() {
 
       <section className="space-y-4">
         <WorkflowRunDetail
-          onSelectStep={setSelectedStepId}
+          onSelectStep={(stepId) => dispatch({ stepId, type: "selectStep" })}
           run={selectedRun}
           selectedStep={selectedStep}
           selectedStepId={selectedStepId}
@@ -145,6 +143,44 @@ export function AgentRunsPage() {
       </section>
     </div>
   );
+}
+
+type AgentRunsPageState = {
+  selectedGraphRunId: string | undefined;
+  selectedStepId: string | undefined;
+  streamError: string | undefined;
+};
+
+type AgentRunsPageAction =
+  | { graphRunId: string | undefined; type: "selectRun" }
+  | { stepId: string | undefined; type: "selectStep" }
+  | { type: "streamStarted" }
+  | { graphRunId: string; type: "streamEvent" }
+  | { message: string; type: "streamFailed" };
+
+const initialAgentRunsPageState: AgentRunsPageState = {
+  selectedGraphRunId: undefined,
+  selectedStepId: undefined,
+  streamError: undefined
+};
+
+function agentRunsPageReducer(state: AgentRunsPageState, action: AgentRunsPageAction): AgentRunsPageState {
+  switch (action.type) {
+    case "selectRun":
+      return { ...state, selectedGraphRunId: action.graphRunId };
+    case "selectStep":
+      return { ...state, selectedStepId: action.stepId };
+    case "streamStarted":
+      return { ...state, streamError: undefined };
+    case "streamEvent":
+      return {
+        ...state,
+        selectedGraphRunId: state.selectedGraphRunId ?? action.graphRunId,
+        streamError: undefined
+      };
+    case "streamFailed":
+      return { ...state, streamError: action.message };
+  }
 }
 
 function SummaryCounters({ failed, running, success, total }: { failed: number; running: number; success: number; total: number }) {
