@@ -14,6 +14,10 @@ import { LlmService } from "../llm/llm.service.js";
 import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 import { QaComplianceAgent } from "./qa-compliance.agent.js";
 import type { UnderstoodContent } from "./agent.types.js";
+import { summarize } from "./text-utils.js";
+
+const SELECTED_RESULT_KEY_FACT_MAX_CHARS = 240;
+const SEARCH_TITLE_MAX_CHARS = 180;
 
 @Injectable()
 export class SearchContentAgent {
@@ -39,7 +43,10 @@ export class SearchContentAgent {
     const rawText = selectedResultsToRawText(input);
     const summary = summarize(rawText);
     const keyFacts = input.selectedResults.map((result, index) =>
-      [`${index + 1}. ${result.title}`, result.snippet, `Source: ${result.url}`].filter(Boolean).join(" - ").slice(0, 240)
+      [`${index + 1}. ${result.title}`, result.snippet, `Source: ${result.url}`]
+        .filter(Boolean)
+        .join(" - ")
+        .slice(0, SELECTED_RESULT_KEY_FACT_MAX_CHARS)
     );
     const { item, duplicate } = await this.db.createContentItem({
       campaignId: campaign.id,
@@ -102,13 +109,9 @@ function selectedResultsToRawText(input: GenerateFromSearchInput): string {
     .join("\n\n");
 }
 
-function summarize(text: string): string {
-  return text.replace(/\s+/g, " ").trim().slice(0, 420);
-}
-
 function titleForSelectedResults(input: GenerateFromSearchInput): string {
   if (input.selectedResults.length === 1) {
-    return input.selectedResults[0]!.title.slice(0, 180);
+    return input.selectedResults[0]!.title.slice(0, SEARCH_TITLE_MAX_CHARS);
   }
-  return `${input.selectedResults.length} selected search results`.slice(0, 180);
+  return `${input.selectedResults.length} selected search results`.slice(0, SEARCH_TITLE_MAX_CHARS);
 }

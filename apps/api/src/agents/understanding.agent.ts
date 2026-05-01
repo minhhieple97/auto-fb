@@ -4,6 +4,7 @@ import { contentHash } from "../common/hash.js";
 import type { RawContentItem } from "../collector/content-source.types.js";
 import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 import type { UnderstoodContent } from "./agent.types.js";
+import { extractKeyFacts, summarize } from "./text-utils.js";
 
 @Injectable()
 export class UnderstandingAgent {
@@ -29,17 +30,4 @@ export class UnderstandingAgent {
 
     return { item, duplicate, summary, keyFacts };
   }
-}
-
-function summarize(text: string): string {
-  return text.replace(/\s+/g, " ").trim().slice(0, 420);
-}
-
-function extractKeyFacts(text: string): string[] {
-  const sentences = text
-    .replace(/\s+/g, " ")
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
-  return (sentences.length > 0 ? sentences : [text.trim()]).slice(0, 4).map((sentence) => sentence.slice(0, 220));
 }

@@ -182,6 +182,15 @@ describe("QaComplianceAgent", () => {
     expect(result.approvedForHumanReview).toBe(false);
   });
 
+  it("flags Vietnamese sensitive claims with diacritics", async () => {
+    const result = await new QaComplianceAgent().check({
+      understood: buildUnderstood({ item: buildContentItem({ sourceUrl: "https://example.com/source" }) }),
+      draftText: "Liệu trình cam kết chữa khỏi 100% trong 7 ngày. https://example.com/source"
+    });
+
+    expect(result.riskFlags).toContain("sensitive_or_unverified_claim");
+  });
+
   it("does not flag image preparation when an image asset exists", async () => {
     const result = await new QaComplianceAgent().check({
       understood: buildUnderstood({

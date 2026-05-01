@@ -82,4 +82,51 @@ describe("MultiAgentWorkflow", () => {
       errorMessage: "LLM unavailable"
     });
   });
+
+  it("short-circuits to mark_duplicate when understanding flags a duplicate item", async () => {
+    const { db, campaign, agents, workflow } = createWorkflowHarness({
+      understanding: { understand: vi.fn().mockResolvedValue(buildUnderstood({ duplicate: true })) }
+    });
+
+    await workflow.run(campaign.id);
+
+    expect(agents.copywriting.write).not.toHaveBeenCalled();
+    expect(agents.image.prepare).not.toHaveBeenCalled();
+    expect(agents.qa.check).not.toHaveBeenCalled();
+    expect(agents.approvalGate.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftText: "",
+        qa: expect.objectContaining({
+          riskFlags: ["duplicate_content"],
+          approvedForHumanReview: false
+        })
+      })
+    );
+    expect(db.listAgentRuns(campaign.id).map((run) => run.nodeName)).toEqual([
+      "load_campaign",
+      "discover_sources",
+      "collect_content",
+      "understand_content",
+      "mark_duplicate",
+      "save_pending_approval"
+    ]);
+  });
+
+  it("projects only node-relevant fields into agent_runs.inputJson", async () => {
+    const { db, campaign, workflow } = createWorkflowHarness();
+
+    await workflow.run(campaign.id);
+
+    const qaRun = db.listAgentRuns(campaign.id).find((run) => run.nodeName === "qa_check");
+    expect(qaRun?.inputJson).toEqual(
+      expect.objectContaining({
+        campaignId: campaign.id,
+        duplicate: false,
+        draftLength: expect.any(Number),
+        hasImageAsset: true
+      })
+    );
+    expect(qaRun?.inputJson).not.toHaveProperty("rawItems");
+    expect(qaRun?.inputJson).not.toHaveProperty("sources");
+  });
 });

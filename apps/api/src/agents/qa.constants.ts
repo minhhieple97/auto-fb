@@ -9,5 +9,6 @@ export const qaRiskFlags = {
 export const qaPolicy = {
   maxDraftCharacters: 3000,
   riskScorePerFlag: 25,
-  sensitiveClaimPattern: /\b(guaranteed|cam ket|100%|chua khoi|dieu tri)\b/i
+  sensitiveClaimPattern:
+    /\b(guaranteed|cam ket|chua khoi|dieu tri|bao dam|khoi 100|100 phan tram)\b|100\s*%/i
 } as const;

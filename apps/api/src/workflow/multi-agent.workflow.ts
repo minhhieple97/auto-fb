@@ -1,13 +1,20 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { randomUUID } from "node:crypto";
-import { agentRunStatuses, agentWorkflowNodes, type AgentRun, type AgentWorkflowNodeName } from "@auto-fb/shared";
+import {
+  agentRunStatuses,
+  agentWorkflowNodes,
+  postDraftRiskScoreLimits,
+  type AgentRun,
+  type AgentWorkflowNodeName
+} from "@auto-fb/shared";
 import { ApprovalGateAgent } from "../agents/approval-gate.agent.js";
-import type { WorkflowState } from "../agents/agent.types.js";
+import type { QaResult, WorkflowState } from "../agents/agent.types.js";
 import { CollectorAgent } from "../agents/collector.agent.js";
 import { CopywritingAgent } from "../agents/copywriting.agent.js";
 import { ImageAgent } from "../agents/image.agent.js";
 import { QaComplianceAgent } from "../agents/qa-compliance.agent.js";
+import { qaPolicy, qaRiskFlags } from "../agents/qa.constants.js";
 import { SourceDiscoveryAgent } from "../agents/source-discovery.agent.js";
 import { UnderstandingAgent } from "../agents/understanding.agent.js";
 import { nowIso } from "../common/time.js";
@@ -93,6 +100,12 @@ export class MultiAgentWorkflow {
           })
         }))
       )
+      .addNode(agentWorkflowNodes.markDuplicate, (state) =>
+        this.runNode(agentWorkflowNodes.markDuplicate, state, options, () => ({
+          draftText: "",
+          qa: buildDuplicateQaResult()
+        }))
+      )
       .addNode(agentWorkflowNodes.savePendingApproval, (state) =>
         this.runNode(agentWorkflowNodes.savePendingApproval, state, options, async () => ({
           draft: await this.approvalGateAgent.save({
@@ -108,7 +121,12 @@ export class MultiAgentWorkflow {
       .addEdge(agentWorkflowNodes.loadCampaign, agentWorkflowNodes.discoverSources)
       .addEdge(agentWorkflowNodes.discoverSources, agentWorkflowNodes.collectContent)
       .addEdge(agentWorkflowNodes.collectContent, agentWorkflowNodes.understandContent)
-      .addEdge(agentWorkflowNodes.understandContent, agentWorkflowNodes.generatePost)
+      .addConditionalEdges(
+        agentWorkflowNodes.understandContent,
+        (state) => (state.understood?.duplicate ? agentWorkflowNodes.markDuplicate : agentWorkflowNodes.generatePost),
+        [agentWorkflowNodes.markDuplicate, agentWorkflowNodes.generatePost]
+      )
+      .addEdge(agentWorkflowNodes.markDuplicate, agentWorkflowNodes.savePendingApproval)
       .addEdge(agentWorkflowNodes.generatePost, agentWorkflowNodes.prepareImage)
       .addEdge(agentWorkflowNodes.prepareImage, agentWorkflowNodes.qaCheck)
       .addEdge(agentWorkflowNodes.qaCheck, agentWorkflowNodes.savePendingApproval)
@@ -140,7 +158,7 @@ export class MultiAgentWorkflow {
       campaignId: state.campaignId,
       graphRunId: state.graphRunId,
       nodeName,
-      inputJson: safeJson(state),
+      inputJson: nodeInputProjection(nodeName, state),
       outputJson: {},
       status: agentRunStatuses.running,
       startedAt
@@ -176,4 +194,74 @@ function required<T>(value: T | undefined, name: string): T {
 
 function safeJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
+}
+
+function buildDuplicateQaResult(): QaResult {
+  return {
+    riskFlags: [qaRiskFlags.duplicateContent],
+    riskScore: Math.min(postDraftRiskScoreLimits.max, qaPolicy.riskScorePerFlag),
+    approvedForHumanReview: false
+  };
+}
+
+function nodeInputProjection(nodeName: AgentWorkflowNodeName, state: WorkflowState): Record<string, unknown> {
+  const base = { campaignId: state.campaignId, graphRunId: state.graphRunId };
+  switch (nodeName) {
+    case agentWorkflowNodes.loadCampaign:
+    case agentWorkflowNodes.discoverSources:
+      return base;
+    case agentWorkflowNodes.collectContent:
+      return { ...base, sourceCount: state.sources?.length ?? 0 };
+    case agentWorkflowNodes.understandContent: {
+      const first = state.rawItems?.[0];
+      return {
+        ...base,
+        rawItemCount: state.rawItems?.length ?? 0,
+        firstRawItem: first
+          ? { sourceId: first.sourceId, sourceUrl: first.sourceUrl, title: first.title, textLength: first.text.length }
+          : null
+      };
+    }
+    case agentWorkflowNodes.generatePost:
+      return {
+        ...base,
+        contentItemId: state.understood?.item.id ?? null,
+        sourceUrl: state.understood?.item.sourceUrl ?? null,
+        summaryLength: state.understood?.summary.length ?? 0,
+        keyFactsCount: state.understood?.keyFacts.length ?? 0
+      };
+    case agentWorkflowNodes.prepareImage:
+      return {
+        ...base,
+        contentItemId: state.understood?.item.id ?? null,
+        imageUrlCount: state.understood?.item.imageUrls.length ?? 0,
+        firstImageUrl: state.understood?.item.imageUrls[0] ?? null
+      };
+    case agentWorkflowNodes.qaCheck:
+      return {
+        ...base,
+        contentItemId: state.understood?.item.id ?? null,
+        duplicate: state.understood?.duplicate ?? false,
+        draftLength: state.draftText?.length ?? 0,
+        hasImageAsset: Boolean(state.imageAsset)
+      };
+    case agentWorkflowNodes.markDuplicate:
+      return {
+        ...base,
+        contentItemId: state.understood?.item.id ?? null,
+        sourceUrl: state.understood?.item.sourceUrl ?? null
+      };
+    case agentWorkflowNodes.savePendingApproval:
+      return {
+        ...base,
+        contentItemId: state.understood?.item.id ?? null,
+        draftLength: state.draftText?.length ?? 0,
+        hasImageAsset: Boolean(state.imageAsset),
+        qa: state.qa ? safeJson(state.qa) : null
+      };
+    case agentWorkflowNodes.searchContent:
+      return base;
+    default:
+      return base;
+  }
 }

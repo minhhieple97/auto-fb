@@ -106,6 +106,7 @@ export const agentWorkflowNodes = {
   generatePost: "generate_post",
   prepareImage: "prepare_image",
   qaCheck: "qa_check",
+  markDuplicate: "mark_duplicate",
   savePendingApproval: "save_pending_approval"
 } as const;
 export const agentWorkflowNodeNames = [
@@ -117,6 +118,7 @@ export const agentWorkflowNodeNames = [
   agentWorkflowNodes.generatePost,
   agentWorkflowNodes.prepareImage,
   agentWorkflowNodes.qaCheck,
+  agentWorkflowNodes.markDuplicate,
   agentWorkflowNodes.savePendingApproval
 ] as const;
 

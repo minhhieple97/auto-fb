@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { postDraftRiskScoreLimits } from "@auto-fb/shared";
 import type { ImageAsset } from "@auto-fb/shared";
 import { qaPolicy, qaRiskFlags } from "./qa.constants.js";
+import { normalizeVietnamese } from "./text-utils.js";
 import type { QaResult, UnderstoodContent } from "./agent.types.js";
 
 @Injectable()
@@ -13,7 +14,9 @@ export class QaComplianceAgent {
     if (!input.draftText.includes(input.understood.item.sourceUrl)) riskFlags.add(qaRiskFlags.missingSourceAttribution);
     if (input.draftText.length > qaPolicy.maxDraftCharacters) riskFlags.add(qaRiskFlags.postTooLong);
     if (input.understood.item.imageUrls.length > 0 && !input.imageAsset) riskFlags.add(qaRiskFlags.imageNotPrepared);
-    if (qaPolicy.sensitiveClaimPattern.test(input.draftText)) riskFlags.add(qaRiskFlags.sensitiveOrUnverifiedClaim);
+    if (qaPolicy.sensitiveClaimPattern.test(normalizeVietnamese(input.draftText))) {
+      riskFlags.add(qaRiskFlags.sensitiveOrUnverifiedClaim);
+    }
 
     const flags = [...riskFlags];
     return {
