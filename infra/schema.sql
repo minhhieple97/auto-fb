@@ -81,9 +81,24 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   node_name TEXT NOT NULL,
   input_json JSONB NOT NULL,
   output_json JSONB NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('SUCCESS', 'FAILED')),
+  status TEXT NOT NULL CHECK (status IN ('RUNNING', 'SUCCESS', 'FAILED')),
   error_message TEXT,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS agent_workflow_runs (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  graph_run_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCESS', 'FAILED')),
+  current_node_name TEXT,
+  triggered_by_user_id TEXT NOT NULL,
+  triggered_by_email TEXT,
+  created_at TIMESTAMPTZ NOT NULL,
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS sources_campaign_id_created_at_idx ON sources (campaign_id, created_at DESC);
@@ -92,6 +107,9 @@ CREATE INDEX IF NOT EXISTS image_assets_campaign_id_created_at_idx ON image_asse
 CREATE INDEX IF NOT EXISTS post_drafts_status_created_at_idx ON post_drafts (status, created_at DESC);
 CREATE INDEX IF NOT EXISTS published_posts_created_at_idx ON published_posts (created_at DESC);
 CREATE INDEX IF NOT EXISTS agent_runs_campaign_id_created_at_idx ON agent_runs (campaign_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS agent_runs_graph_run_id_created_at_idx ON agent_runs (graph_run_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS agent_workflow_runs_campaign_id_created_at_idx ON agent_workflow_runs (campaign_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS agent_workflow_runs_status_created_at_idx ON agent_workflow_runs (status, created_at DESC);
 
 ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sources ENABLE ROW LEVEL SECURITY;
@@ -100,3 +118,4 @@ ALTER TABLE image_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE post_drafts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE published_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_workflow_runs ENABLE ROW LEVEL SECURITY;

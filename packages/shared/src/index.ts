@@ -8,7 +8,19 @@ export const llmProviderSchema = z.enum(["openai", "anthropic", "gemini", "deeps
 export const draftStatusSchema = z.enum(["PENDING_APPROVAL", "APPROVED", "REJECTED", "PUBLISHED"]);
 export const approvalStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
 export const publishStatusSchema = z.enum(["DRY_RUN_PUBLISHED", "PUBLISHED", "FAILED"]);
-export const agentRunStatusSchema = z.enum(["SUCCESS", "FAILED"]);
+export const agentRunStatusSchema = z.enum(["RUNNING", "SUCCESS", "FAILED"]);
+export const agentWorkflowRunStatusSchema = z.enum(["QUEUED", "RUNNING", "SUCCESS", "FAILED"]);
+
+export const agentWorkflowNodeNames = [
+  "load_campaign",
+  "discover_sources",
+  "collect_content",
+  "understand_content",
+  "generate_post",
+  "prepare_image",
+  "qa_check",
+  "save_pending_approval"
+] as const;
 
 export type CampaignStatus = z.infer<typeof campaignStatusSchema>;
 export type SourceType = z.infer<typeof sourceTypeSchema>;
@@ -17,6 +29,8 @@ export type DraftStatus = z.infer<typeof draftStatusSchema>;
 export type ApprovalStatus = z.infer<typeof approvalStatusSchema>;
 export type PublishStatus = z.infer<typeof publishStatusSchema>;
 export type AgentRunStatus = z.infer<typeof agentRunStatusSchema>;
+export type AgentWorkflowRunStatus = z.infer<typeof agentWorkflowRunStatusSchema>;
+export type AgentWorkflowNodeName = (typeof agentWorkflowNodeNames)[number];
 
 export const campaignSchema = z.object({
   id: z.string(),
@@ -111,7 +125,26 @@ export const agentRunSchema = z.object({
   outputJson: z.unknown(),
   status: agentRunStatusSchema,
   errorMessage: z.string().optional(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
   createdAt: z.string()
+});
+
+export const agentWorkflowRunSchema = z.object({
+  id: z.string(),
+  campaignId: z.string(),
+  graphRunId: z.string(),
+  status: agentWorkflowRunStatusSchema,
+  currentNodeName: z.string().optional(),
+  triggeredByUserId: z.string(),
+  triggeredByEmail: z.string().optional(),
+  createdAt: z.string(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional()
+});
+
+export const agentWorkflowRunDetailSchema = agentWorkflowRunSchema.extend({
+  steps: z.array(agentRunSchema)
 });
 
 export const publishedPostSchema = z.object({
@@ -139,6 +172,8 @@ export type ImageAsset = z.infer<typeof imageAssetSchema>;
 export type ContentItem = z.infer<typeof contentItemSchema>;
 export type PostDraft = z.infer<typeof postDraftSchema>;
 export type AgentRun = z.infer<typeof agentRunSchema>;
+export type AgentWorkflowRun = z.infer<typeof agentWorkflowRunSchema>;
+export type AgentWorkflowRunDetail = z.infer<typeof agentWorkflowRunDetailSchema>;
 export type PublishedPost = z.infer<typeof publishedPostSchema>;
 export type PublishOptions = z.infer<typeof publishOptionsSchema>;
 
@@ -150,4 +185,9 @@ export type ApiError = {
 export type AgentTimeline = {
   graphRunId: string;
   runs: AgentRun[];
+};
+
+export type AgentWorkflowRunEvent = {
+  type: "workflow_run_updated";
+  run: AgentWorkflowRunDetail;
 };
