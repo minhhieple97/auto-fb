@@ -3,6 +3,8 @@ dist/
 coverage/
 .turbo/
 .vite/
+.codex/
+.agents/
 .env
 .env.local
 *.log
