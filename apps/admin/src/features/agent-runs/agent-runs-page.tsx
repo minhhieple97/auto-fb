@@ -6,17 +6,11 @@ import { agentWorkflowNodeNames } from "@auto-fb/shared";
 import { AlertTriangle, Bot, CheckCircle2, Clock3, LoaderCircle, XCircle } from "lucide-react";
 import { useAdminStore } from "../../app/admin.store.js";
 import { api } from "../../lib/api-client.js";
-import type { AdminRoute } from "../navigation/admin-header.js";
-import { AdminHeader } from "../navigation/admin-header.js";
 import { CampaignRunPanel } from "../workflow/campaign-run-panel.js";
-
-type AgentRunsPageProps = {
-  onNavigate: (route: AdminRoute) => void;
-};
 
 const stepOrder = new Map<string, number>(agentWorkflowNodeNames.map((name, index) => [name, index]));
 
-export function AgentRunsPage({ onNavigate }: AgentRunsPageProps) {
+export function AgentRunsPage() {
   const queryClient = useQueryClient();
   const selectedCampaignId = useAdminStore((state) => state.selectedCampaignId);
   const setSelectedCampaignId = useAdminStore((state) => state.setSelectedCampaignId);
@@ -70,99 +64,86 @@ export function AgentRunsPage({ onNavigate }: AgentRunsPageProps) {
     });
   }, [queryClient, selectedCampaignId, workflowQueryKey]);
 
-  const refreshAll = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
-      queryClient.invalidateQueries({ queryKey: ["agent-workflow-runs"] }),
-      queryClient.invalidateQueries({ queryKey: ["agent-runs"] }),
-      queryClient.invalidateQueries({ queryKey: ["drafts"] })
-    ]);
-  };
-
   return (
-    <main className="min-h-screen bg-canvas">
-      <AdminHeader activeRoute="/agent-runs" onNavigate={onNavigate} onRefresh={refreshAll} />
-
-      <div className="mx-auto grid max-w-7xl gap-4 px-6 py-6 xl:grid-cols-[360px_1fr]">
-        <aside className="space-y-4">
-          <section className="panel p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Bot size={18} />
-              <h2 className="text-base font-semibold">Agent runs</h2>
-            </div>
-            <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="agent-run-campaign">
-              Campaign
-            </label>
-            <select
-              className="field w-full"
-              id="agent-run-campaign"
-              onChange={(event) => setSelectedCampaignId(event.target.value || undefined)}
-              value={selectedCampaignId ?? ""}
-            >
-              <option value="">All campaigns</option>
-              {(campaigns.data ?? []).map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.name}
-                </option>
-              ))}
-            </select>
-          </section>
-
-          <CampaignRunPanel
-            campaignId={selectedCampaignId}
-            onRunCreated={(run) => {
-              queryClient.setQueryData<AgentWorkflowRunDetail[]>(workflowQueryKey, (current = []) => upsertWorkflowRun(current, run));
-              setSelectedGraphRunId(run.graphRunId);
-            }}
-          />
-
-          <SummaryCounters {...counters} />
-
-          <section className="panel p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold">Workflow history</h2>
-              {workflowRuns.isFetching ? <LoaderCircle className="animate-spin text-slate-500" size={16} /> : null}
-            </div>
-            {streamError ? (
-              <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                <AlertTriangle className="mt-0.5 shrink-0" size={16} />
-                <span>{streamError}</span>
-              </div>
-            ) : null}
-            <div className="space-y-2">
-              {(workflowRuns.data ?? []).length === 0 ? <p className="text-sm text-slate-600">No workflow runs</p> : null}
-              {(workflowRuns.data ?? []).map((run) => (
-                <button
-                  className={`w-full rounded-md border p-3 text-left text-sm ${
-                    run.graphRunId === selectedGraphRunId ? "border-action bg-emerald-50" : "border-line bg-white"
-                  }`}
-                  key={run.graphRunId}
-                  onClick={() => setSelectedGraphRunId(run.graphRunId)}
-                  type="button"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{run.currentNodeName ?? run.graphRunId.slice(0, 8)}</span>
-                    <StatusPill status={run.status} />
-                  </div>
-                  <div className="mt-1 text-xs text-slate-600">{run.triggeredByEmail ?? run.triggeredByUserId}</div>
-                  <div className="mt-1 text-xs text-slate-500">{formatDate(run.createdAt)}</div>
-                </button>
-              ))}
-            </div>
-          </section>
-        </aside>
-
-        <section className="space-y-4">
-          <WorkflowRunDetail
-            onSelectStep={setSelectedStepId}
-            run={selectedRun}
-            selectedStep={selectedStep}
-            selectedStepId={selectedStepId}
-            steps={orderedSteps}
-          />
+    <div className="mx-auto grid max-w-7xl gap-4 px-6 py-6 xl:grid-cols-[360px_1fr]">
+      <aside className="space-y-4">
+        <section className="panel p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Bot size={18} />
+            <h2 className="text-base font-semibold">Agent runs</h2>
+          </div>
+          <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="agent-run-campaign">
+            Campaign
+          </label>
+          <select
+            className="field w-full"
+            id="agent-run-campaign"
+            onChange={(event) => setSelectedCampaignId(event.target.value || undefined)}
+            value={selectedCampaignId ?? ""}
+          >
+            <option value="">All campaigns</option>
+            {(campaigns.data ?? []).map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.name}
+              </option>
+            ))}
+          </select>
         </section>
-      </div>
-    </main>
+
+        <CampaignRunPanel
+          campaignId={selectedCampaignId}
+          onRunCreated={(run) => {
+            queryClient.setQueryData<AgentWorkflowRunDetail[]>(workflowQueryKey, (current = []) => upsertWorkflowRun(current, run));
+            setSelectedGraphRunId(run.graphRunId);
+          }}
+        />
+
+        <SummaryCounters {...counters} />
+
+        <section className="panel p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">Workflow history</h2>
+            {workflowRuns.isFetching ? <LoaderCircle className="animate-spin text-slate-500" size={16} /> : null}
+          </div>
+          {streamError ? (
+            <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <AlertTriangle className="mt-0.5 shrink-0" size={16} />
+              <span>{streamError}</span>
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            {(workflowRuns.data ?? []).length === 0 ? <p className="text-sm text-slate-600">No workflow runs</p> : null}
+            {(workflowRuns.data ?? []).map((run) => (
+              <button
+                className={`w-full rounded-md border p-3 text-left text-sm ${
+                  run.graphRunId === selectedGraphRunId ? "border-action bg-emerald-50" : "border-line bg-white"
+                }`}
+                key={run.graphRunId}
+                onClick={() => setSelectedGraphRunId(run.graphRunId)}
+                type="button"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{run.currentNodeName ?? run.graphRunId.slice(0, 8)}</span>
+                  <StatusPill status={run.status} />
+                </div>
+                <div className="mt-1 text-xs text-slate-600">{run.triggeredByEmail ?? run.triggeredByUserId}</div>
+                <div className="mt-1 text-xs text-slate-500">{formatDate(run.createdAt)}</div>
+              </button>
+            ))}
+          </div>
+        </section>
+      </aside>
+
+      <section className="space-y-4">
+        <WorkflowRunDetail
+          onSelectStep={setSelectedStepId}
+          run={selectedRun}
+          selectedStep={selectedStep}
+          selectedStepId={selectedStepId}
+          steps={orderedSteps}
+        />
+      </section>
+    </div>
   );
 }
 

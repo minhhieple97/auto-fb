@@ -16,13 +16,6 @@ vi.mock("../../lib/api-client.js", () => ({
   }
 }));
 
-vi.mock("../../app/auth-provider.js", () => ({
-  useAuth: () => ({
-    signOut: vi.fn(),
-    user: { email: "admin@example.com" }
-  })
-}));
-
 const workflowRuns = vi.mocked(api.agentWorkflowRuns);
 const campaigns = vi.mocked(api.campaigns);
 const streamAgentWorkflowRuns = vi.mocked(api.streamAgentWorkflowRuns);
@@ -94,7 +87,7 @@ describe("AgentRunsPage", () => {
   it("renders counters, active step details, actor, and JSON panels", async () => {
     workflowRuns.mockResolvedValue([workflowRun(), workflowRun({ id: "workflow_2", graphRunId: "graph_2", status: "SUCCESS", steps: [] })]);
 
-    renderWithClient(<AgentRunsPage onNavigate={vi.fn()} />);
+    renderWithClient(<AgentRunsPage />);
 
     expect(await screen.findByText("Workflow history")).toBeInTheDocument();
     expect(screen.getByText("admin@example.com")).toBeInTheDocument();
@@ -129,7 +122,7 @@ describe("AgentRunsPage", () => {
       })
     ]);
 
-    renderWithClient(<AgentRunsPage onNavigate={vi.fn()} />);
+    renderWithClient(<AgentRunsPage />);
 
     await user.click(await screen.findByRole("button", { name: /qa_check/i }));
 

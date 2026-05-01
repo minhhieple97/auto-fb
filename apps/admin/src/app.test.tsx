@@ -61,6 +61,7 @@ function mockAuthListener() {
 describe("admin app auth", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    window.history.replaceState({}, "", "/");
     supabaseMock.getSession.mockReset();
     supabaseMock.onAuthStateChange.mockReset();
     supabaseMock.setCurrentAuthSession.mockReset();
@@ -91,6 +92,19 @@ describe("admin app auth", () => {
     expect(screen.getByText("Agent timeline")).toBeInTheDocument();
     expect(screen.getByText("Published history")).toBeInTheDocument();
     expect(screen.getByText("admin@example.com")).toBeInTheDocument();
+  });
+
+  it("navigates to agent workflow runs with React Router", async () => {
+    const user = userEvent.setup();
+    mockApiResponses();
+    supabaseMock.getSession.mockResolvedValue({ data: { session }, error: null });
+
+    renderWithClient(<App />);
+
+    await user.click(await screen.findByRole("link", { name: /agent runs/i }));
+
+    expect(await screen.findByText("Workflow history")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/agent-runs");
   });
 
   it("signs in with Supabase email and password", async () => {
