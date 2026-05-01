@@ -9,14 +9,19 @@ import type {
   ContentItem,
   CreateCampaignInput,
   CreateSourceInput,
+  Database,
   DraftStatus,
   ImageAsset,
+  Json,
   LlmProvider,
   PostDraft,
   PublishedPost,
   PublishStatus,
   Source,
   SourceType,
+  Tables,
+  TablesInsert,
+  TablesUpdate,
   UpdateCampaignInput
 } from "@auto-fb/shared";
 import { randomUUID } from "node:crypto";
@@ -34,95 +39,20 @@ type SupabaseRequestOptions = Omit<RequestInit, "headers"> & {
   headers?: Record<string, string>;
 };
 
-type CampaignRow = {
-  id: string;
-  name: string;
-  topic: string;
-  language: string;
-  brand_voice: string;
-  target_page_id: string;
-  llm_provider: LlmProvider;
-  llm_model: string;
-  status: CampaignStatus;
-  created_at: string;
-  updated_at: string;
-};
-
-type SourceRow = {
-  id: string;
-  campaign_id: string;
-  type: SourceType;
-  url: string;
-  crawl_policy: string;
-  enabled: boolean;
-  created_at: string;
-};
-
-type ContentItemRow = {
-  id: string;
-  campaign_id: string;
-  source_id: string;
-  source_url: string;
-  title: string;
-  raw_text: string;
-  summary: string;
-  image_urls: string[];
-  hash: string;
-  created_at: string;
-};
-
-type ImageAssetRow = {
-  id: string;
-  campaign_id: string;
-  source_url: string | null;
-  r2_key: string;
-  public_url: string | null;
-  mime_type: string;
-  created_at: string;
-};
-
-type PostDraftRow = {
-  id: string;
-  campaign_id: string;
-  content_item_id: string;
-  image_asset_id: string | null;
-  text: string;
-  status: DraftStatus;
-  risk_score: number;
-  risk_flags: string[];
-  approval_status: ApprovalStatus;
-  created_at: string;
-  updated_at: string;
-};
+type SupabaseTable = keyof Database["public"]["Tables"];
+type CampaignRow = Tables<"campaigns">;
+type SourceRow = Tables<"sources">;
+type ContentItemRow = Tables<"content_items">;
+type ImageAssetRow = Tables<"image_assets">;
+type PostDraftRow = Tables<"post_drafts">;
 
 type PostDraftJoinedRow = PostDraftRow & {
   content_items?: ContentItemRow | null;
   image_assets?: ImageAssetRow | null;
 };
 
-type PublishedPostRow = {
-  id: string;
-  post_draft_id: string;
-  facebook_page_id: string;
-  facebook_post_id: string | null;
-  status: PublishStatus;
-  publish_payload: unknown;
-  error_message: string | null;
-  published_at: string | null;
-  created_at: string;
-};
-
-type AgentRunRow = {
-  id: string;
-  campaign_id: string;
-  graph_run_id: string;
-  node_name: string;
-  input_json: unknown;
-  output_json: unknown;
-  status: AgentRunStatus;
-  error_message: string | null;
-  created_at: string;
-};
+type PublishedPostRow = Tables<"published_posts">;
+type AgentRunRow = Tables<"agent_runs">;
 
 const DRAFT_SELECT = "*,content_items(*),image_assets(*)";
 
@@ -152,7 +82,7 @@ export class SupabaseDatabase implements DatabaseRepository {
 
   async createCampaign(input: CreateCampaignInput): Promise<Campaign> {
     const timestamp = nowIso();
-    const row = await this.insertOne<CampaignRow>("campaigns", {
+    const row = await this.insertOne("campaigns", {
       id: randomUUID(),
       name: input.name,
       topic: input.topic,
@@ -169,17 +99,17 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async listCampaigns(): Promise<Campaign[]> {
-    const rows = await this.selectMany<CampaignRow>("campaigns", { order: "created_at.desc" });
+    const rows = await this.selectMany("campaigns", { order: "created_at.desc" });
     return rows.map(toCampaign);
   }
 
   async getCampaign(id: string): Promise<Campaign> {
-    const row = await this.selectOne<CampaignRow>("campaigns", { id: this.eq(id) }, `Campaign ${id} not found`);
+    const row = await this.selectOne("campaigns", { id: this.eq(id) }, `Campaign ${id} not found`);
     return toCampaign(row);
   }
 
   async updateCampaign(id: string, input: UpdateCampaignInput): Promise<Campaign> {
-    const patch: Partial<CampaignRow> = { updated_at: nowIso() };
+    const patch: TablesUpdate<"campaigns"> = { updated_at: nowIso() };
     if (input.name !== undefined) patch.name = input.name;
     if (input.topic !== undefined) patch.topic = input.topic;
     if (input.language !== undefined) patch.language = input.language;
@@ -189,13 +119,13 @@ export class SupabaseDatabase implements DatabaseRepository {
     if (input.llmModel !== undefined) patch.llm_model = input.llmModel;
     if (input.status !== undefined) patch.status = input.status;
 
-    const row = await this.updateOne<CampaignRow>("campaigns", { id: this.eq(id) }, patch, `Campaign ${id} not found`);
+    const row = await this.updateOne("campaigns", { id: this.eq(id) }, patch, `Campaign ${id} not found`);
     return toCampaign(row);
   }
 
   async createSource(campaignId: string, input: CreateSourceInput): Promise<Source> {
     await this.getCampaign(campaignId);
-    const row = await this.insertOne<SourceRow>("sources", {
+    const row = await this.insertOne("sources", {
       id: randomUUID(),
       campaign_id: campaignId,
       type: input.type,
@@ -208,18 +138,18 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async listSources(campaignId: string): Promise<Source[]> {
-    const rows = await this.selectMany<SourceRow>("sources", { campaign_id: this.eq(campaignId), order: "created_at.desc" });
+    const rows = await this.selectMany("sources", { campaign_id: this.eq(campaignId), order: "created_at.desc" });
     return rows.map(toSource);
   }
 
   async getSource(id: string): Promise<Source> {
-    const row = await this.selectOne<SourceRow>("sources", { id: this.eq(id) }, `Source ${id} not found`);
+    const row = await this.selectOne("sources", { id: this.eq(id) }, `Source ${id} not found`);
     return toSource(row);
   }
 
   async createContentItem(input: CreateContentInput): Promise<{ item: ContentItem; duplicate: boolean }> {
     try {
-      const row = await this.insertOne<ContentItemRow>("content_items", {
+      const row = await this.insertOne("content_items", {
         id: randomUUID(),
         campaign_id: input.campaignId,
         source_id: input.sourceId,
@@ -241,7 +171,7 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async listContentItems(campaignId: string): Promise<ContentItem[]> {
-    const rows = await this.selectMany<ContentItemRow>("content_items", {
+    const rows = await this.selectMany("content_items", {
       campaign_id: this.eq(campaignId),
       order: "created_at.desc"
     });
@@ -249,12 +179,12 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async getContentItem(id: string): Promise<ContentItem> {
-    const row = await this.selectOne<ContentItemRow>("content_items", { id: this.eq(id) }, `Content item ${id} not found`);
+    const row = await this.selectOne("content_items", { id: this.eq(id) }, `Content item ${id} not found`);
     return toContentItem(row);
   }
 
   async hasContentHash(campaignId: string, hash: string): Promise<boolean> {
-    const rows = await this.selectMany<{ id: string }>("content_items", {
+    const rows = await this.selectMany<"content_items", { id: string }>("content_items", {
       select: "id",
       campaign_id: this.eq(campaignId),
       hash: this.eq(hash),
@@ -264,7 +194,7 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async createImageAsset(input: CreateImageAssetInput): Promise<ImageAsset> {
-    const row = await this.insertOne<ImageAssetRow>("image_assets", {
+    const row = await this.insertOne("image_assets", {
       id: randomUUID(),
       campaign_id: input.campaignId,
       source_url: input.sourceUrl ?? null,
@@ -277,13 +207,13 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async getImageAsset(id: string): Promise<ImageAsset> {
-    const row = await this.selectOne<ImageAssetRow>("image_assets", { id: this.eq(id) }, `Image asset ${id} not found`);
+    const row = await this.selectOne("image_assets", { id: this.eq(id) }, `Image asset ${id} not found`);
     return toImageAsset(row);
   }
 
   async createDraft(input: CreateDraftInput): Promise<PostDraft> {
     const timestamp = nowIso();
-    const row = await this.insertOne<PostDraftRow>("post_drafts", {
+    const row = await this.insertOne("post_drafts", {
       id: randomUUID(),
       campaign_id: input.campaignId,
       content_item_id: input.contentItemId,
@@ -300,7 +230,7 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async listDrafts(status?: DraftStatus): Promise<PostDraft[]> {
-    const rows = await this.selectMany<PostDraftJoinedRow>("post_drafts", {
+    const rows = await this.selectMany<"post_drafts", PostDraftJoinedRow>("post_drafts", {
       select: DRAFT_SELECT,
       ...(status ? { status: this.eq(status) } : {}),
       order: "created_at.desc"
@@ -309,12 +239,16 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async getDraft(id: string): Promise<PostDraft> {
-    const row = await this.selectOne<PostDraftJoinedRow>("post_drafts", { select: DRAFT_SELECT, id: this.eq(id) }, `Draft ${id} not found`);
+    const row = await this.selectOne<"post_drafts", PostDraftJoinedRow>(
+      "post_drafts",
+      { select: DRAFT_SELECT, id: this.eq(id) },
+      `Draft ${id} not found`
+    );
     return toPostDraft(row);
   }
 
   async updateDraftStatus(id: string, status: DraftStatus, approvalStatus: ApprovalStatus): Promise<PostDraft> {
-    await this.updateOne<PostDraftRow>(
+    await this.updateOne(
       "post_drafts",
       { id: this.eq(id) },
       { status, approval_status: approvalStatus, updated_at: nowIso() },
@@ -324,13 +258,13 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async createPublishedPost(input: CreatePublishedPostInput): Promise<PublishedPost> {
-    const row = await this.insertOne<PublishedPostRow>("published_posts", {
+    const row = await this.insertOne("published_posts", {
       id: randomUUID(),
       post_draft_id: input.postDraftId,
       facebook_page_id: input.facebookPageId,
       facebook_post_id: input.facebookPostId ?? null,
       status: input.status,
-      publish_payload: input.publishPayload,
+      publish_payload: toJson(input.publishPayload, "published_posts.publish_payload"),
       error_message: input.errorMessage ?? null,
       published_at: input.publishedAt ?? null,
       created_at: nowIso()
@@ -339,18 +273,18 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async listPublishedPosts(): Promise<PublishedPost[]> {
-    const rows = await this.selectMany<PublishedPostRow>("published_posts", { order: "created_at.desc" });
+    const rows = await this.selectMany("published_posts", { order: "created_at.desc" });
     return rows.map(toPublishedPost);
   }
 
   async addAgentRun(input: CreateAgentRunInput): Promise<AgentRun> {
-    const row = await this.insertOne<AgentRunRow>("agent_runs", {
+    const row = await this.insertOne("agent_runs", {
       id: randomUUID(),
       campaign_id: input.campaignId,
       graph_run_id: input.graphRunId,
       node_name: input.nodeName,
-      input_json: input.inputJson,
-      output_json: input.outputJson,
+      input_json: toJson(input.inputJson, "agent_runs.input_json"),
+      output_json: toJson(input.outputJson, "agent_runs.output_json"),
       status: input.status,
       error_message: input.errorMessage ?? null,
       created_at: nowIso()
@@ -359,7 +293,7 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async listAgentRuns(campaignId?: string): Promise<AgentRun[]> {
-    const rows = await this.selectMany<AgentRunRow>("agent_runs", {
+    const rows = await this.selectMany("agent_runs", {
       ...(campaignId ? { campaign_id: this.eq(campaignId) } : {}),
       order: "created_at.asc"
     });
@@ -367,7 +301,7 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   private async findContentByCampaignHash(campaignId: string, hash: string): Promise<ContentItem | undefined> {
-    const rows = await this.selectMany<ContentItemRow>("content_items", {
+    const rows = await this.selectMany("content_items", {
       campaign_id: this.eq(campaignId),
       hash: this.eq(hash),
       limit: "1"
@@ -376,18 +310,29 @@ export class SupabaseDatabase implements DatabaseRepository {
     return row ? toContentItem(row) : undefined;
   }
 
-  private async selectMany<Row>(table: string, params: Record<string, string | undefined> = {}): Promise<Row[]> {
+  private async selectMany<Table extends SupabaseTable, Row = Tables<Table>>(
+    table: Table,
+    params: Record<string, string | undefined> = {}
+  ): Promise<Row[]> {
     return this.request<Row[]>(this.path(table, { select: "*", ...params }));
   }
 
-  private async selectOne<Row>(table: string, params: Record<string, string | undefined>, notFoundMessage: string): Promise<Row> {
-    const rows = await this.selectMany<Row>(table, { ...params, limit: "1" });
+  private async selectOne<Table extends SupabaseTable, Row = Tables<Table>>(
+    table: Table,
+    params: Record<string, string | undefined>,
+    notFoundMessage: string
+  ): Promise<Row> {
+    const rows = await this.selectMany<Table, Row>(table, { ...params, limit: "1" });
     const row = rows[0];
     if (!row) throw new NotFoundException(notFoundMessage);
     return row;
   }
 
-  private async insertOne<Row>(table: string, body: Record<string, unknown>, select = "*"): Promise<Row> {
+  private async insertOne<Table extends SupabaseTable, Row = Tables<Table>>(
+    table: Table,
+    body: TablesInsert<Table>,
+    select = "*"
+  ): Promise<Row> {
     const rows = await this.request<Row[] | Row>(
       this.path(table, { select }),
       {
@@ -399,10 +344,10 @@ export class SupabaseDatabase implements DatabaseRepository {
     return firstRepresentation(rows, `Supabase did not return inserted ${table}`);
   }
 
-  private async updateOne<Row>(
-    table: string,
+  private async updateOne<Table extends SupabaseTable, Row = Tables<Table>>(
+    table: Table,
     filters: Record<string, string>,
-    body: Record<string, unknown>,
+    body: TablesUpdate<Table>,
     notFoundMessage: string
   ): Promise<Row> {
     const rows = await this.request<Row[] | Row>(
@@ -506,6 +451,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function toJson(value: unknown, fieldName: string): Json {
+  if (isJson(value)) return value;
+  throw new InternalServerErrorException(`Supabase ${fieldName} must be JSON serializable`);
+}
+
+function isJson(value: unknown): value is Json {
+  if (value === null) return true;
+  if (typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJson);
+  if (!isRecord(value)) return false;
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+
+  return Object.values(value).every((item) => item === undefined || isJson(item));
+}
+
+function stringArrayFromJson(value: Json, fieldName: string): string[] {
+  if (Array.isArray(value) && value.every((item): item is string => typeof item === "string")) return value;
+  throw new InternalServerErrorException(`Supabase ${fieldName} must be a string array`);
+}
+
 function toCampaign(row: CampaignRow): Campaign {
   return {
     id: row.id,
@@ -514,9 +482,9 @@ function toCampaign(row: CampaignRow): Campaign {
     language: row.language,
     brandVoice: row.brand_voice,
     targetPageId: row.target_page_id,
-    llmProvider: row.llm_provider,
+    llmProvider: row.llm_provider as LlmProvider,
     llmModel: row.llm_model,
-    status: row.status,
+    status: row.status as CampaignStatus,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -526,7 +494,7 @@ function toSource(row: SourceRow): Source {
   return {
     id: row.id,
     campaignId: row.campaign_id,
-    type: row.type,
+    type: row.type as SourceType,
     url: row.url,
     crawlPolicy: row.crawl_policy,
     enabled: row.enabled,
@@ -543,7 +511,7 @@ function toContentItem(row: ContentItemRow): ContentItem {
     title: row.title,
     rawText: row.raw_text,
     summary: row.summary,
-    imageUrls: row.image_urls,
+    imageUrls: stringArrayFromJson(row.image_urls, "content_items.image_urls"),
     hash: row.hash,
     createdAt: row.created_at
   };
@@ -568,10 +536,10 @@ function toPostDraft(row: PostDraftJoinedRow): PostDraft {
     contentItemId: row.content_item_id,
     ...(row.image_asset_id ? { imageAssetId: row.image_asset_id } : {}),
     text: row.text,
-    status: row.status,
+    status: row.status as DraftStatus,
     riskScore: row.risk_score,
-    riskFlags: row.risk_flags,
-    approvalStatus: row.approval_status,
+    riskFlags: stringArrayFromJson(row.risk_flags, "post_drafts.risk_flags"),
+    approvalStatus: row.approval_status as ApprovalStatus,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     ...(row.content_items ? { contentItem: toContentItem(row.content_items) } : {}),
@@ -585,7 +553,7 @@ function toPublishedPost(row: PublishedPostRow): PublishedPost {
     postDraftId: row.post_draft_id,
     facebookPageId: row.facebook_page_id,
     ...(row.facebook_post_id ? { facebookPostId: row.facebook_post_id } : {}),
-    status: row.status,
+    status: row.status as PublishStatus,
     publishPayload: row.publish_payload,
     ...(row.error_message ? { errorMessage: row.error_message } : {}),
     ...(row.published_at ? { publishedAt: row.published_at } : {}),
@@ -601,7 +569,7 @@ function toAgentRun(row: AgentRunRow): AgentRun {
     nodeName: row.node_name,
     inputJson: row.input_json,
     outputJson: row.output_json,
-    status: row.status,
+    status: row.status as AgentRunStatus,
     ...(row.error_message ? { errorMessage: row.error_message } : {}),
     createdAt: row.created_at
   };

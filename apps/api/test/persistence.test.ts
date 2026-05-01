@@ -179,6 +179,12 @@ describe("SupabaseDatabase", () => {
     ]);
   });
 
+  it("rejects Supabase JSON list fields that do not match shared DTO arrays", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse([{ ...contentRow, image_urls: ["ok", 42] }]));
+
+    await expect(db().listContentItems("camp_1")).rejects.toThrow("Supabase content_items.image_urls must be a string array");
+  });
+
   it("returns the existing content item when Supabase reports a unique hash conflict", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
