@@ -1,3 +1,4 @@
+import { llmModels } from "@auto-fb/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientError, api } from "./api-client.js";
 
@@ -73,7 +74,7 @@ describe("api client auth headers", () => {
         JSON.stringify({
           query: "AI automation",
           provider: "gemini",
-          model: "gemini-2.5-flash",
+          model: llmModels.gemini.flash3Preview,
           searchQueries: ["AI automation"],
           results: []
         }),
@@ -81,7 +82,7 @@ describe("api client auth headers", () => {
       )
     );
 
-    await api.searchAgent("camp_1", { query: "AI automation", limit: 10, provider: "gemini", model: "gemini-2.5-flash" });
+    await api.searchAgent("camp_1", { query: "AI automation", limit: 10, provider: "gemini", model: llmModels.gemini.flash3Preview });
 
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/campaigns/camp_1/agent-search/search");
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe("POST");

@@ -11,6 +11,7 @@ import {
   generateFromSearchInputSchema,
   agentRunSchema,
   agentWorkflowRunDetailSchema,
+  llmModels,
   postDraftSchema,
   publishOptionsSchema,
   permissionsForRole,
@@ -177,7 +178,7 @@ describe("shared API contracts", () => {
       query: "latest AI automation",
       limit: 20,
       provider: "gemini",
-      model: "gemini-2.5-flash"
+      model: llmModels.gemini.flash3Preview
     });
     expect(() => agentSearchInputSchema.parse({ query: "x", limit: 21 })).toThrow();
 
@@ -192,14 +193,14 @@ describe("shared API contracts", () => {
       agentSearchResponseSchema.parse({
         query: "latest AI automation",
         provider: "gemini",
-        model: "gemini-2.5-flash",
+        model: llmModels.gemini.flash3Preview,
         searchQueries: ["latest AI automation"],
         results: [result]
       })
     ).toMatchObject({ results: [result] });
     expect(generateFromSearchInputSchema.parse({ selectedResults: [result] })).toMatchObject({
       provider: "gemini",
-      model: "gemini-2.5-flash",
+      model: llmModels.gemini.flash3Preview,
       selectedResults: [result]
     });
   });

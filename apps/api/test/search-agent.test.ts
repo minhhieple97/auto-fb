@@ -1,3 +1,4 @@
+import { llmModels } from "@auto-fb/shared";
 import { describe, expect, it, vi } from "vitest";
 import { SearchContentAgent } from "../src/agents/search-content.agent.js";
 import { FakeDatabase } from "./fake-database.js";
@@ -18,7 +19,7 @@ describe("SearchContentAgent", () => {
     const searchResponse = {
       query: "AI automation",
       provider: "gemini" as const,
-      model: "gemini-2.5-flash",
+      model: llmModels.gemini.flash3Preview,
       searchQueries: ["AI automation"],
       results: [selectedResult]
     };
@@ -28,10 +29,10 @@ describe("SearchContentAgent", () => {
     };
     const agent = new SearchContentAgent(db, llm as never, { check: vi.fn() } as never);
 
-    await expect(agent.search(campaign.id, { query: "AI automation", limit: 10, provider: "gemini", model: "gemini-2.5-flash" })).resolves.toEqual(
+    await expect(agent.search(campaign.id, { query: "AI automation", limit: 10, provider: "gemini", model: llmModels.gemini.flash3Preview })).resolves.toEqual(
       searchResponse
     );
-    expect(llm.searchContent).toHaveBeenCalledWith({ query: "AI automation", limit: 10, provider: "gemini", model: "gemini-2.5-flash" });
+    expect(llm.searchContent).toHaveBeenCalledWith({ query: "AI automation", limit: 10, provider: "gemini", model: llmModels.gemini.flash3Preview });
   });
 
   it("creates a pending approval draft from selected search results", async () => {
@@ -42,7 +43,7 @@ describe("SearchContentAgent", () => {
       generatePost: vi.fn().mockResolvedValue({
         text: "Draft from selected result\n\nNguon: https://example.com/story",
         provider: "gemini",
-        model: "gemini-2.5-flash"
+        model: llmModels.gemini.flash3Preview
       })
     };
     const qa = { check: vi.fn().mockResolvedValue({ riskScore: 0, riskFlags: [], approvedForHumanReview: true }) };
@@ -52,7 +53,7 @@ describe("SearchContentAgent", () => {
       selectedResults: [selectedResult],
       instructions: "Keep it short.",
       provider: "gemini",
-      model: "gemini-2.5-flash"
+      model: llmModels.gemini.flash3Preview
     });
 
     expect(response.draft).toMatchObject({
@@ -74,7 +75,7 @@ describe("SearchContentAgent", () => {
     expect(llm.generatePost).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "gemini",
-        model: "gemini-2.5-flash",
+        model: llmModels.gemini.flash3Preview,
         topic: "AI operations",
         sourceUrl: "https://example.com/story",
         instructions: expect.stringContaining("Keep it short.")

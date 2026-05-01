@@ -1,4 +1,5 @@
 import { ConfigService } from "@nestjs/config";
+import { llmModels } from "@auto-fb/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpLlmClient } from "../src/llm/http-llm.client.js";
 import { LlmService } from "../src/llm/llm.service.js";
@@ -49,7 +50,7 @@ describe("MockLlmClient", () => {
   it("generates deterministic search results for local flows", async () => {
     const result = await new MockLlmClient().searchContent({
       provider: "gemini",
-      model: "gemini-2.5-flash",
+      model: llmModels.gemini.flash3Preview,
       query: "AI automation",
       limit: 2
     });
@@ -150,12 +151,12 @@ describe("HttpLlmClient", () => {
     const result = await new HttpLlmClient({ provider: "gemini", apiKey: "gemini_key" }).generatePost({
       ...generateInput,
       provider: "gemini",
-      model: "gemini-1.5-flash"
+      model: llmModels.gemini.flash3Preview
     });
 
     expect(result.text).toBe("Gemini post");
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=gemini_key"
+      `https://generativelanguage.googleapis.com/v1beta/models/${llmModels.gemini.flash3Preview}:generateContent?key=gemini_key`
     );
   });
 
@@ -178,14 +179,14 @@ describe("HttpLlmClient", () => {
 
     const result = await new HttpLlmClient({ provider: "gemini", apiKey: "gemini_key" }).searchContent({
       provider: "gemini",
-      model: "gemini-2.5-flash",
+      model: llmModels.gemini.flash3Preview,
       query: "AI automation",
       limit: 10
     });
 
     expect(result).toMatchObject({
       provider: "gemini",
-      model: "gemini-2.5-flash",
+      model: llmModels.gemini.flash3Preview,
       searchQueries: ["AI automation"],
       searchEntryPointHtml: "<div>Search suggestions</div>",
       results: [

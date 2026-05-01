@@ -1,3 +1,4 @@
+import { llmModels } from "@auto-fb/shared";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,7 +42,7 @@ describe("SearchAgentPanel", () => {
     searchAgent.mockResolvedValue({
       query: "AI automation",
       provider: "gemini",
-      model: "gemini-2.5-flash",
+      model: llmModels.gemini.flash3Preview,
       searchQueries: ["AI automation"],
       results: [searchResult]
     });
@@ -89,14 +90,14 @@ describe("SearchAgentPanel", () => {
         selectedResults: [searchResult],
         instructions: "Keep it short.",
         provider: "gemini",
-        model: "gemini-2.5-flash"
+        model: llmModels.gemini.flash3Preview
       })
     );
     expect(searchAgent).toHaveBeenCalledWith("campaign-1", {
       query: "AI automation",
       limit: 10,
       provider: "gemini",
-      model: "gemini-2.5-flash"
+      model: llmModels.gemini.flash3Preview
     });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drafts"] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["sources"] });

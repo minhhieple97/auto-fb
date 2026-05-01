@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { permissionsForRole } from "@auto-fb/shared";
+import { llmModels, permissionsForRole } from "@auto-fb/shared";
 import { AgentRunsController } from "../src/workflow/agent-runs.controller.js";
 import { CampaignsController } from "../src/campaigns/campaigns.controller.js";
 import { DraftsController } from "../src/drafts/drafts.controller.js";
@@ -110,7 +110,7 @@ describe("SearchAgentController", () => {
     const searchResponse = {
       query: "AI automation",
       provider: "gemini" as const,
-      model: "gemini-2.5-flash",
+      model: llmModels.gemini.flash3Preview,
       searchQueries: ["AI automation"],
       results: [searchResult]
     };
@@ -126,21 +126,21 @@ describe("SearchAgentController", () => {
     const controller = new SearchAgentController(searchAgent as never);
 
     await expect(
-      controller.search("camp_1", { query: "AI automation", limit: 10, provider: "gemini", model: "gemini-2.5-flash" })
+      controller.search("camp_1", { query: "AI automation", limit: 10, provider: "gemini", model: llmModels.gemini.flash3Preview })
     ).resolves.toEqual(searchResponse);
     await expect(
-      controller.generate("camp_1", { selectedResults: [searchResult], provider: "gemini", model: "gemini-2.5-flash" })
+      controller.generate("camp_1", { selectedResults: [searchResult], provider: "gemini", model: llmModels.gemini.flash3Preview })
     ).resolves.toEqual(generateResponse);
     expect(searchAgent.search).toHaveBeenCalledWith("camp_1", {
       query: "AI automation",
       limit: 10,
       provider: "gemini",
-      model: "gemini-2.5-flash"
+      model: llmModels.gemini.flash3Preview
     });
     expect(searchAgent.generate).toHaveBeenCalledWith("camp_1", {
       selectedResults: [searchResult],
       provider: "gemini",
-      model: "gemini-2.5-flash"
+      model: llmModels.gemini.flash3Preview
     });
   });
 });

@@ -33,6 +33,28 @@ export const llmProviders = {
 } as const;
 export const llmProviderValues = [llmProviders.openai, llmProviders.anthropic, llmProviders.gemini, llmProviders.deepseek, llmProviders.mock] as const;
 
+export const llmModels = {
+  openai: {
+    gpt4oMini: "gpt-4o-mini",
+    gpt41Mini: "gpt-4.1-mini",
+    gpt41: "gpt-4.1"
+  },
+  anthropic: {
+    haiku35: "claude-3-5-haiku-latest",
+    sonnet35: "claude-3-5-sonnet-latest"
+  },
+  gemini: {
+    flash3Preview: "gemini-3-flash-preview"
+  },
+  deepseek: {
+    chat: "deepseek-chat",
+    reasoner: "deepseek-reasoner"
+  },
+  mock: {
+    copywriterV1: "mock-copywriter-v1"
+  }
+} as const;
+
 export const draftStatuses = {
   pendingApproval: "PENDING_APPROVAL",
   approved: "APPROVED",
@@ -185,7 +207,7 @@ export const campaignDefaults = {
   language: "vi",
   brandVoice: "helpful, concise, practical",
   llmProvider: llmProviders.openai,
-  llmModel: "gpt-4o-mini"
+  llmModel: llmModels.openai.gpt4oMini
 } as const;
 
 export const fanpageScheduleDefaults = {
@@ -205,7 +227,7 @@ export const fanpageScheduleLimits = {
 
 export const agentSearchDefaults = {
   provider: llmProviders.gemini,
-  model: "gemini-2.5-flash",
+  model: llmModels.gemini.flash3Preview,
   resultLimit: agentSearchResultLimits.default
 } as const;
 
@@ -271,11 +293,11 @@ export function roleHasPermission(role: AppRole, permission: AdminPermission): b
 }
 
 export const llmProviderModels = {
-  openai: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"],
-  anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest"],
-  gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
-  deepseek: ["deepseek-chat", "deepseek-reasoner"],
-  mock: ["mock-copywriter-v1"]
+  openai: [llmModels.openai.gpt4oMini, llmModels.openai.gpt41Mini, llmModels.openai.gpt41],
+  anthropic: [llmModels.anthropic.haiku35, llmModels.anthropic.sonnet35],
+  gemini: [llmModels.gemini.flash3Preview],
+  deepseek: [llmModels.deepseek.chat, llmModels.deepseek.reasoner],
+  mock: [llmModels.mock.copywriterV1]
 } as const satisfies Record<LlmProvider, readonly string[]>;
 
 export const campaignSchema = z.object({
