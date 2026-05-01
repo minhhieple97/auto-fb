@@ -92,6 +92,22 @@ export const agentWorkflowRunEventTypes = {
   workflowRunUpdated: "workflow_run_updated"
 } as const;
 
+export const apiPathSegments = {
+  agentRuns: "agent-runs",
+  agentWorkflowRuns: "agent-workflow-runs",
+  approve: "approve",
+  auth: "auth",
+  campaigns: "campaigns",
+  drafts: "drafts",
+  me: "me",
+  publishedPosts: "published-posts",
+  publish: "publish",
+  reject: "reject",
+  runs: "runs",
+  sources: "sources",
+  stream: "stream"
+} as const;
+
 export const appRoles = {
   owner: "owner",
   editor: "editor",
