@@ -1,10 +1,10 @@
 import { Controller, Get, Req, UnauthorizedException } from "@nestjs/common";
-import type { AdminProfile } from "@auto-fb/shared";
+import { apiPathSegments, type AdminProfile } from "@auto-fb/shared";
 import { type AuthenticatedRequest } from "./supabase-jwt.guard.js";
 
-@Controller("auth")
+@Controller(apiPathSegments.auth)
 export class AuthController {
-  @Get("me")
+  @Get(apiPathSegments.me)
   me(@Req() request: AuthenticatedRequest): AdminProfile {
     if (!request.user) {
       throw new UnauthorizedException("Missing authenticated admin user");

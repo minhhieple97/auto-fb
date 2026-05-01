@@ -5,11 +5,12 @@ import { queryKeys } from "../../app/query-keys.js";
 import { api } from "../../lib/api-client.js";
 
 type CampaignRunPanelProps = {
+  canRun?: boolean;
   campaignId: string | undefined;
   onRunCreated?: (run: AgentWorkflowRunDetail) => void;
 };
 
-export function CampaignRunPanel({ campaignId, onRunCreated }: CampaignRunPanelProps) {
+export function CampaignRunPanel({ canRun = true, campaignId, onRunCreated }: CampaignRunPanelProps) {
   const queryClient = useQueryClient();
   const runWorkflow = useMutation({
     mutationFn: (id: string) => api.runWorkflow(id),
@@ -31,7 +32,7 @@ export function CampaignRunPanel({ campaignId, onRunCreated }: CampaignRunPanelP
       </div>
       <button
         className="button bg-action text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-        disabled={!campaignId || runWorkflow.isPending}
+        disabled={!campaignId || !canRun || runWorkflow.isPending}
         onClick={() => campaignId && runWorkflow.mutate(campaignId)}
         title="Run agents"
       >

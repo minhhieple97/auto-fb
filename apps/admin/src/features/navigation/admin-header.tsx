@@ -9,7 +9,7 @@ import { adminRoutes } from "../../app/routes.js";
 export function AdminHeader() {
   const queryClient = useQueryClient();
   const location = useLocation();
-  const { signOut, user } = useAuth();
+  const { profile, signOut, user } = useAuth();
 
   const refreshRoute = () => invalidateRouteData(queryClient, location.pathname);
 
@@ -34,7 +34,12 @@ export function AdminHeader() {
               Agent runs
             </NavButton>
           </nav>
-          {user?.email ? <span className="hidden text-sm text-slate-600 sm:inline">{user.email}</span> : null}
+          {profile?.email ?? user?.email ? (
+            <div className="hidden text-right text-sm sm:block">
+              <div className="text-slate-700">{profile?.email ?? user?.email}</div>
+              {profile?.role ? <div className="text-xs font-semibold uppercase text-slate-500">{profile.role}</div> : null}
+            </div>
+          ) : null}
           <button className="button border border-line bg-white text-ink" onClick={refreshRoute} title="Refresh">
             <RefreshCw size={16} />
             Refresh

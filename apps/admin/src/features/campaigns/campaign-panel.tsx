@@ -14,6 +14,7 @@ import { api } from "../../lib/api-client.js";
 import { providerModels } from "./provider-models.js";
 
 type CampaignPanelProps = {
+  canCreate?: boolean;
   selectedCampaignId: string | undefined;
   onSelect: (id: string) => void;
   onCreated: (id: string) => void;
@@ -43,7 +44,7 @@ function firstModelForProvider(provider: LlmProvider) {
   return providerModels[provider]?.[0] ?? providerModels[llmProviders.openai][0] ?? campaignDefaults.llmModel;
 }
 
-export function CampaignPanel({ selectedCampaignId, onSelect, onCreated }: CampaignPanelProps) {
+export function CampaignPanel({ canCreate = true, selectedCampaignId, onSelect, onCreated }: CampaignPanelProps) {
   const queryClient = useQueryClient();
   const campaigns = useQuery({ queryKey: queryKeys.campaigns, queryFn: api.campaigns });
   const form = useForm<CreateCampaignInput>({
@@ -91,8 +92,9 @@ export function CampaignPanel({ selectedCampaignId, onSelect, onCreated }: Campa
           </button>
         ))}
       </div>
-      <Form {...form}>
-        <form className="grid gap-3" noValidate onSubmit={form.handleSubmit(submit)}>
+      {canCreate ? (
+        <Form {...form}>
+          <form className="grid gap-3" noValidate onSubmit={form.handleSubmit(submit)}>
           <FormField
             control={form.control}
             name="name"
@@ -205,12 +207,13 @@ export function CampaignPanel({ selectedCampaignId, onSelect, onCreated }: Campa
               )}
             />
           </div>
-          <Button disabled={createCampaign.isPending} title="Create campaign" type="submit">
-            <Plus size={16} />
-            {createCampaign.isPending ? "Creating" : "Create"}
-          </Button>
-        </form>
-      </Form>
+            <Button disabled={createCampaign.isPending} title="Create campaign" type="submit">
+              <Plus size={16} />
+              {createCampaign.isPending ? "Creating" : "Create"}
+            </Button>
+          </form>
+        </Form>
+      ) : null}
     </div>
   );
 }

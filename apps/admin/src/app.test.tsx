@@ -1,5 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { permissionsForRole, type AdminProfile } from "@auto-fb/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./app.js";
 import { renderWithClient } from "./test/render.js";
@@ -42,10 +43,27 @@ const session = {
   }
 };
 
-function mockApiResponses() {
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } })
-  );
+const editorProfile: AdminProfile = {
+  authUserId: "user-1",
+  email: "admin@example.com",
+  role: "editor",
+  status: "active",
+  permissions: permissionsForRole("editor")
+};
+
+function jsonResponse(payload: unknown, init: ResponseInit = {}) {
+  return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" }, ...init });
+}
+
+function mockApiResponses(profile: AdminProfile = editorProfile) {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/auth/me")) {
+      return Promise.resolve(jsonResponse(profile));
+    }
+
+    return Promise.resolve(jsonResponse([]));
+  });
 }
 
 function mockAuthListener() {
@@ -92,6 +110,47 @@ describe("admin app auth", () => {
     expect(screen.getByText("Agent timeline")).toBeInTheDocument();
     expect(screen.getByText("Published history")).toBeInTheDocument();
     expect(screen.getByText("admin@example.com")).toBeInTheDocument();
+    expect(screen.getByText("editor")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /create/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add source/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /run agents/i })).toBeInTheDocument();
+  });
+
+  it("keeps viewer sessions read-only", async () => {
+    mockApiResponses({
+      authUserId: "user-1",
+      email: "viewer@example.com",
+      role: "viewer",
+      status: "active",
+      permissions: permissionsForRole("viewer")
+    });
+    supabaseMock.getSession.mockResolvedValue({ data: { session }, error: null });
+
+    renderWithClient(<App />);
+
+    expect(await screen.findByText("Campaigns")).toBeInTheDocument();
+    expect(screen.getByText("viewer")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /create/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add source/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /run agents/i })).toBeDisabled();
+  });
+
+  it("shows an access blocked state for authenticated Supabase users without admin access", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/auth/me")) {
+        return Promise.resolve(jsonResponse({ message: "Supabase user is not an active admin user" }, { status: 403 }));
+      }
+
+      return Promise.resolve(jsonResponse([]));
+    });
+    supabaseMock.getSession.mockResolvedValue({ data: { session }, error: null });
+
+    renderWithClient(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Access not granted" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
+    expect(screen.queryByText("Campaigns")).not.toBeInTheDocument();
   });
 
   it("navigates to agent workflow runs with React Router", async () => {

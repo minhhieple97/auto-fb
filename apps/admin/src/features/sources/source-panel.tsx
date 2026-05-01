@@ -13,6 +13,7 @@ import { api } from "../../lib/api-client.js";
 import { sourceTypeOptions } from "./source-options.js";
 
 type SourcePanelProps = {
+  canCreate?: boolean;
   campaignId: string | undefined;
   sources: Source[];
 };
@@ -31,7 +32,7 @@ const sourceDefaultValues: CreateSourceInput = {
   enabled: sourceDefaults.enabled
 };
 
-export function SourcePanel({ campaignId, sources }: SourcePanelProps) {
+export function SourcePanel({ canCreate = true, campaignId, sources }: SourcePanelProps) {
   const queryClient = useQueryClient();
   const form = useForm<CreateSourceInput>({
     resolver: zodResolver(sourceFormSchema),
@@ -41,7 +42,7 @@ export function SourcePanel({ campaignId, sources }: SourcePanelProps) {
     mutationFn: ({ id, input }: { id: string; input: CreateSourceInput }) => api.createSource(id, input),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: queryKeys.sourcesRoot })
   });
-  const disabled = !campaignId || createSource.isPending;
+  const disabled = !campaignId || !canCreate || createSource.isPending;
 
   function submit(values: CreateSourceInput) {
     if (!campaignId) return;
@@ -66,8 +67,9 @@ export function SourcePanel({ campaignId, sources }: SourcePanelProps) {
           </div>
         ))}
       </div>
-      <Form {...form}>
-        <form className="grid gap-3" noValidate onSubmit={form.handleSubmit(submit)}>
+      {canCreate ? (
+        <Form {...form}>
+          <form className="grid gap-3" noValidate onSubmit={form.handleSubmit(submit)}>
           <FormField
             control={form.control}
             name="type"
@@ -100,12 +102,13 @@ export function SourcePanel({ campaignId, sources }: SourcePanelProps) {
               </FormItem>
             )}
           />
-          <Button disabled={disabled} title="Add source" type="submit">
-            <Plus size={16} />
-            {createSource.isPending ? "Adding" : "Add source"}
-          </Button>
-        </form>
-      </Form>
+            <Button disabled={disabled} title="Add source" type="submit">
+              <Plus size={16} />
+              {createSource.isPending ? "Adding" : "Add source"}
+            </Button>
+          </form>
+        </Form>
+      ) : null}
     </div>
   );
 }
