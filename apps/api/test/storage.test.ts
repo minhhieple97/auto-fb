@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { ConfigService } from "@nestjs/config";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StorageService } from "../src/storage/storage.service.js";
