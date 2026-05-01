@@ -53,6 +53,18 @@ describe("CollectorAgent", () => {
 
     await expect(agent.collect([buildSource()])).rejects.toThrow("No usable content found from enabled sources");
   });
+
+  it("retries transient collector network failures", async () => {
+    const networkError = new TypeError("fetch failed");
+    (networkError as { cause?: unknown }).cause = { code: "ECONNRESET" };
+    const collector = {
+      collect: vi.fn().mockRejectedValueOnce(networkError).mockResolvedValueOnce([buildRawItem({ title: "Recovered", text: "Body" })])
+    };
+    const agent = new CollectorAgent(collector as never);
+
+    await expect(agent.collect([buildSource()])).resolves.toMatchObject([{ title: "Recovered" }]);
+    expect(collector.collect).toHaveBeenCalledTimes(2);
+  }, 10_000);
 });
 
 describe("UnderstandingAgent", () => {
@@ -130,6 +142,29 @@ describe("CopywritingAgent", () => {
       "LLM returned empty post text"
     );
   });
+
+  it("retries transient LLM failures and returns the eventual success", async () => {
+    const llm = {
+      generatePost: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Anthropic returned 503"))
+        .mockResolvedValueOnce({ text: "Recovered draft", provider: "mock", model: "mock-copywriter-v1" })
+    };
+
+    await expect(new CopywritingAgent(llm as never).write(buildCampaign(), buildUnderstood())).resolves.toBe(
+      "Recovered draft"
+    );
+    expect(llm.generatePost).toHaveBeenCalledTimes(2);
+  }, 10_000);
+
+  it("does not retry permanent LLM failures (4xx)", async () => {
+    const llm = { generatePost: vi.fn().mockRejectedValue(new Error("LLM provider returned 401")) };
+
+    await expect(new CopywritingAgent(llm as never).write(buildCampaign(), buildUnderstood())).rejects.toThrow(
+      "401"
+    );
+    expect(llm.generatePost).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("ImageAgent", () => {
@@ -150,6 +185,20 @@ describe("ImageAgent", () => {
     await expect(new ImageAgent(storage as never).prepare(campaign, understood)).resolves.toEqual(image);
     expect(storage.uploadRemoteImage).toHaveBeenCalledWith({ campaignId: "camp_image", sourceUrl: "https://example.com/a.png" });
   });
+
+  it("retries transient storage failures when uploading the image", async () => {
+    const image = buildImageAsset();
+    const storage = {
+      uploadRemoteImage: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Image source https://example.com/a.png returned 502"))
+        .mockResolvedValueOnce(image)
+    };
+    const understood = buildUnderstood({ item: buildContentItem({ imageUrls: ["https://example.com/a.png"] }) });
+
+    await expect(new ImageAgent(storage as never).prepare(buildCampaign(), understood)).resolves.toEqual(image);
+    expect(storage.uploadRemoteImage).toHaveBeenCalledTimes(2);
+  }, 10_000);
 });
 
 describe("QaComplianceAgent", () => {
