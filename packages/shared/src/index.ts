@@ -196,7 +196,7 @@ export function permissionsForRole(role: AppRole): AdminPermission[] {
 }
 
 export function roleHasPermission(role: AppRole, permission: AdminPermission): boolean {
-  return rolePermissions[role].includes(permission);
+  return permissionsForRole(role).includes(permission);
 }
 
 export const llmProviderModels = {
