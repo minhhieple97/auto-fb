@@ -1,36 +1,53 @@
-import { FormEvent } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CreateSourceInput, Source, SourceType } from "@auto-fb/shared";
+import { sourceTypeSchema, type CreateSourceInput, type Source } from "@auto-fb/shared";
 import { Plus, Send } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { Button } from "../../components/ui/button.js";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "../../components/ui/form.js";
+import { Input } from "../../components/ui/input.js";
+import { Select } from "../../components/ui/select.js";
 import { api } from "../../lib/api-client.js";
-import { stringField } from "../../lib/form.js";
 
 type SourcePanelProps = {
   campaignId: string | undefined;
   sources: Source[];
 };
 
+const sourceFormSchema = z.object({
+  type: sourceTypeSchema,
+  url: z.string().trim().url("Enter a valid source URL."),
+  crawlPolicy: z.string().min(1),
+  enabled: z.boolean()
+}) satisfies z.ZodType<CreateSourceInput>;
+
+const sourceDefaultValues: CreateSourceInput = {
+  type: "rss",
+  url: "",
+  crawlPolicy: "whitelist_only",
+  enabled: true
+};
+
 export function SourcePanel({ campaignId, sources }: SourcePanelProps) {
   const queryClient = useQueryClient();
+  const form = useForm<CreateSourceInput>({
+    resolver: zodResolver(sourceFormSchema),
+    defaultValues: sourceDefaultValues
+  });
   const createSource = useMutation({
     mutationFn: ({ id, input }: { id: string; input: CreateSourceInput }) => api.createSource(id, input),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["sources"] })
   });
+  const disabled = !campaignId || createSource.isPending;
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function submit(values: CreateSourceInput) {
     if (!campaignId) return;
-    const form = new FormData(event.currentTarget);
     createSource.mutate({
       id: campaignId,
-      input: {
-        type: stringField(form, "type") as SourceType,
-        url: stringField(form, "url"),
-        crawlPolicy: "whitelist_only",
-        enabled: true
-      }
+      input: values
     });
-    event.currentTarget.reset();
+    form.reset(sourceDefaultValues);
   }
 
   return (
@@ -47,18 +64,44 @@ export function SourcePanel({ campaignId, sources }: SourcePanelProps) {
           </div>
         ))}
       </div>
-      <form className="grid gap-2" onSubmit={submit}>
-        <select className="field" name="type" defaultValue="rss" disabled={!campaignId}>
-          <option value="rss">RSS</option>
-          <option value="api">JSON API</option>
-          <option value="static_html">Static HTML</option>
-        </select>
-        <input className="field" name="url" placeholder="https://example.com/feed.xml" required disabled={!campaignId} />
-        <button className="button bg-ink text-white disabled:bg-slate-300" disabled={!campaignId} title="Add source">
-          <Plus size={16} />
-          Add source
-        </button>
-      </form>
+      <Form {...form}>
+        <form className="grid gap-3" noValidate onSubmit={form.handleSubmit(submit)}>
+          <FormField
+            control={form.control}
+            name="type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Source type</FormLabel>
+                <FormControl>
+                  <Select disabled={disabled} {...field}>
+                    <option value="rss">RSS</option>
+                    <option value="api">JSON API</option>
+                    <option value="static_html">Static HTML</option>
+                  </Select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="url"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>URL</FormLabel>
+                <FormControl>
+                  <Input disabled={disabled} placeholder="https://example.com/feed.xml" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Button disabled={disabled} title="Add source" type="submit">
+            <Plus size={16} />
+            {createSource.isPending ? "Adding" : "Add source"}
+          </Button>
+        </form>
+      </Form>
     </div>
   );
 }

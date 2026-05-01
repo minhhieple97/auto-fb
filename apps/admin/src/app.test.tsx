@@ -114,6 +114,20 @@ describe("admin app auth", () => {
     expect(await screen.findByText("Campaigns")).toBeInTheDocument();
   });
 
+  it("validates login input before calling Supabase", async () => {
+    const user = userEvent.setup();
+    supabaseMock.getSession.mockResolvedValue({ data: { session: null }, error: null });
+
+    renderWithClient(<App />);
+
+    await user.type(await screen.findByLabelText("Email"), "not-an-email");
+    await user.type(screen.getByLabelText("Password"), "correct-password");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByText("Enter a valid email address.")).toBeInTheDocument();
+    expect(supabaseMock.signInWithPassword).not.toHaveBeenCalled();
+  });
+
   it("signs out of the current Supabase session", async () => {
     const user = userEvent.setup();
     mockApiResponses();
