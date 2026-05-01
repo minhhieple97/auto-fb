@@ -11,8 +11,8 @@ import { AgentWorkflowQueueService } from "./agent-workflow-queue.service.js";
 @Controller()
 export class AgentRunsController {
   constructor(
-    private readonly queue: AgentWorkflowQueueService,
-    private readonly events: AgentWorkflowEventsService,
+    @Inject(AgentWorkflowQueueService) private readonly queue: AgentWorkflowQueueService,
+    @Inject(AgentWorkflowEventsService) private readonly events: AgentWorkflowEventsService,
     @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository
   ) {}
 

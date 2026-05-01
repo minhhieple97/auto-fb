@@ -24,8 +24,8 @@ import { FanpagesService } from "./fanpages.service.js";
 @Controller(apiRoutes.fanpages)
 export class FanpagesController {
   constructor(
-    private readonly fanpages: FanpagesService,
-    private readonly queue: AgentWorkflowQueueService,
+    @Inject(FanpagesService) private readonly fanpages: FanpagesService,
+    @Inject(AgentWorkflowQueueService) private readonly queue: AgentWorkflowQueueService,
     @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository
   ) {}
 

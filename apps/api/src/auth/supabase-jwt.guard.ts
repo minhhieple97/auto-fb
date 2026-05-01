@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
+import { CanActivate, ExecutionContext, Inject, Injectable } from "@nestjs/common";
 import { SupabaseActor, SupabaseAuthService } from "./supabase-auth.service.js";
 
 export type AuthenticatedRequest = {
@@ -8,7 +8,7 @@ export type AuthenticatedRequest = {
 
 @Injectable()
 export class SupabaseJwtGuard implements CanActivate {
-  constructor(private readonly auth: SupabaseAuthService) {}
+  constructor(@Inject(SupabaseAuthService) private readonly auth: SupabaseAuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();

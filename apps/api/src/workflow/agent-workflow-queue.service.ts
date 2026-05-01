@@ -27,10 +27,10 @@ export class AgentWorkflowQueueService implements OnModuleDestroy {
   private readonly worker?: Worker<AgentWorkflowJob>;
 
   constructor(
-    config: ConfigService,
+    @Inject(ConfigService) config: ConfigService,
     @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository,
-    private readonly workflow: MultiAgentWorkflow,
-    private readonly events: AgentWorkflowEventsService
+    @Inject(MultiAgentWorkflow) private readonly workflow: MultiAgentWorkflow,
+    @Inject(AgentWorkflowEventsService) private readonly events: AgentWorkflowEventsService
   ) {
     const redisUrl = config.get<string>(envKeys.redisUrl);
     if (redisUrl) {

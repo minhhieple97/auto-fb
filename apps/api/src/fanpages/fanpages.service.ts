@@ -22,7 +22,7 @@ export class FanpagesService {
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository,
-    private readonly tokenCrypto: PageTokenCryptoService
+    @Inject(PageTokenCryptoService) private readonly tokenCrypto: PageTokenCryptoService
   ) {}
 
   async create(input: CreateFanpageInput): Promise<Fanpage> {

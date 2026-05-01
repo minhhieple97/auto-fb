@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post } from "@nestjs/common";
+import { Body, Controller, Inject, Param, Post } from "@nestjs/common";
 import {
   adminPermissions,
   agentSearchInputSchema,
@@ -14,7 +14,7 @@ import { SearchContentAgent } from "./search-content.agent.js";
 @RequirePermissions(adminPermissions.runWorkflow)
 @Controller()
 export class SearchAgentController {
-  constructor(private readonly searchAgent: SearchContentAgent) {}
+  constructor(@Inject(SearchContentAgent) private readonly searchAgent: SearchContentAgent) {}
 
   @Post(apiRoutes.campaignAgentSearch)
   async search(@Param("campaignId") campaignId: string, @Body(new ZodValidationPipe(agentSearchInputSchema)) input: AgentSearchInput) {

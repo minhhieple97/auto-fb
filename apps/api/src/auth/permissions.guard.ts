@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { AdminPermission } from "@auto-fb/shared";
 import { type AuthenticatedRequest } from "./supabase-jwt.guard.js";
@@ -6,7 +6,7 @@ import { REQUIRED_PERMISSIONS_KEY } from "./permissions.decorator.js";
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(@Inject(Reflector) private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
     const requiredPermissions =
