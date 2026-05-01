@@ -6,7 +6,7 @@ import { ImageAgent } from "../src/agents/image.agent.js";
 import { QaComplianceAgent } from "../src/agents/qa-compliance.agent.js";
 import { SourceDiscoveryAgent } from "../src/agents/source-discovery.agent.js";
 import { UnderstandingAgent } from "../src/agents/understanding.agent.js";
-import { InMemoryDatabase } from "../src/persistence/in-memory.database.js";
+import { FakeDatabase } from "./fake-database.js";
 import {
   buildCampaign,
   buildCampaignInput,
@@ -20,7 +20,7 @@ import {
 
 describe("SourceDiscoveryAgent", () => {
   it("returns only enabled sources for a campaign", async () => {
-    const db = new InMemoryDatabase();
+    const db = new FakeDatabase();
     const campaign = db.createCampaign(buildCampaignInput());
     const enabled = db.createSource(campaign.id, buildSourceInput({ url: "https://example.com/enabled" }));
     db.createSource(campaign.id, buildSourceInput({ url: "https://example.com/disabled", enabled: false }));
@@ -29,7 +29,7 @@ describe("SourceDiscoveryAgent", () => {
   });
 
   it("throws when the campaign has no enabled sources", async () => {
-    const db = new InMemoryDatabase();
+    const db = new FakeDatabase();
     const campaign = db.createCampaign(buildCampaignInput());
     db.createSource(campaign.id, buildSourceInput({ enabled: false }));
 
@@ -57,7 +57,7 @@ describe("CollectorAgent", () => {
 
 describe("UnderstandingAgent", () => {
   it("selects the first raw item, stores content and extracts facts", async () => {
-    const db = new InMemoryDatabase();
+    const db = new FakeDatabase();
     const campaign = db.createCampaign(buildCampaignInput());
     const agent = new UnderstandingAgent(db);
 
@@ -83,7 +83,7 @@ describe("UnderstandingAgent", () => {
   });
 
   it("marks duplicate content for the same campaign", async () => {
-    const db = new InMemoryDatabase();
+    const db = new FakeDatabase();
     const campaign = db.createCampaign(buildCampaignInput());
     const agent = new UnderstandingAgent(db);
     const rawItem = buildRawItem({ title: "Same", text: "Same text" });
@@ -95,7 +95,7 @@ describe("UnderstandingAgent", () => {
   });
 
   it("throws when no raw item is available", async () => {
-    await expect(new UnderstandingAgent(new InMemoryDatabase()).understand(buildCampaign(), [])).rejects.toThrow(
+    await expect(new UnderstandingAgent(new FakeDatabase()).understand(buildCampaign(), [])).rejects.toThrow(
       "No content item selected for understanding"
     );
   });
@@ -181,11 +181,23 @@ describe("QaComplianceAgent", () => {
     expect(result.riskScore).toBe(100);
     expect(result.approvedForHumanReview).toBe(false);
   });
+
+  it("does not flag image preparation when an image asset exists", async () => {
+    const result = await new QaComplianceAgent().check({
+      understood: buildUnderstood({
+        item: buildContentItem({ sourceUrl: "https://example.com/source", imageUrls: ["https://example.com/image.png"] })
+      }),
+      draftText: "Draft text\n\nNguon: https://example.com/source",
+      imageAsset: buildImageAsset()
+    });
+
+    expect(result).toEqual({ riskScore: 0, riskFlags: [], approvedForHumanReview: true });
+  });
 });
 
 describe("ApprovalGateAgent", () => {
   it("persists a pending approval draft with QA metadata and optional image asset", async () => {
-    const db = new InMemoryDatabase();
+    const db = new FakeDatabase();
     const campaign = db.createCampaign(buildCampaignInput());
     const content = db.createContentItem({
       campaignId: campaign.id,
@@ -222,5 +234,35 @@ describe("ApprovalGateAgent", () => {
       riskFlags: ["missing_source_attribution"],
       approvalStatus: "PENDING"
     });
+  });
+
+  it("persists pending approval drafts without image assets", async () => {
+    const db = new FakeDatabase();
+    const campaign = db.createCampaign(buildCampaignInput());
+    const content = db.createContentItem({
+      campaignId: campaign.id,
+      sourceId: "src_1",
+      sourceUrl: "https://example.com/story",
+      title: "Story",
+      rawText: "Text",
+      summary: "Summary",
+      imageUrls: [],
+      hash: "hash_1"
+    }).item;
+
+    const draft = await new ApprovalGateAgent(db).save({
+      campaign,
+      understood: buildUnderstood({ item: content }),
+      draftText: "Draft",
+      qa: { riskScore: 0, riskFlags: [], approvedForHumanReview: true }
+    });
+
+    expect(draft).toMatchObject({
+      campaignId: campaign.id,
+      contentItemId: content.id,
+      status: "PENDING_APPROVAL",
+      approvalStatus: "PENDING"
+    });
+    expect(draft.imageAssetId).toBeUndefined();
   });
 });

@@ -15,7 +15,7 @@ import {
 } from "./helpers.js";
 
 describe("CampaignsController", () => {
-  it("delegates campaign CRUD operations to the database", () => {
+  it("delegates campaign CRUD operations to the database", async () => {
     const db = {
       createCampaign: vi.fn().mockReturnValue(buildCampaign()),
       listCampaigns: vi.fn().mockReturnValue([buildCampaign()]),
@@ -24,37 +24,37 @@ describe("CampaignsController", () => {
     };
     const controller = new CampaignsController(db as never);
 
-    expect(controller.create(buildCampaignInput())).toMatchObject({ id: "camp_1" });
-    expect(controller.list()).toHaveLength(1);
-    expect(controller.get("camp_2")).toMatchObject({ id: "camp_2" });
-    expect(controller.update("camp_1", { status: "PAUSED" })).toMatchObject({ status: "PAUSED" });
+    await expect(controller.create(buildCampaignInput())).resolves.toMatchObject({ id: "camp_1" });
+    await expect(controller.list()).resolves.toHaveLength(1);
+    await expect(controller.get("camp_2")).resolves.toMatchObject({ id: "camp_2" });
+    await expect(controller.update("camp_1", { status: "PAUSED" })).resolves.toMatchObject({ status: "PAUSED" });
     expect(db.updateCampaign).toHaveBeenCalledWith("camp_1", { status: "PAUSED" });
   });
 });
 
 describe("SourcesController", () => {
-  it("creates and lists campaign sources", () => {
+  it("creates and lists campaign sources", async () => {
     const db = {
       createSource: vi.fn().mockReturnValue(buildSource()),
       listSources: vi.fn().mockReturnValue([buildSource()])
     };
     const controller = new SourcesController(db as never);
 
-    expect(controller.create("camp_1", buildSourceInput())).toMatchObject({ campaignId: "camp_1" });
-    expect(controller.list("camp_1")).toHaveLength(1);
+    await expect(controller.create("camp_1", buildSourceInput())).resolves.toMatchObject({ campaignId: "camp_1" });
+    await expect(controller.list("camp_1")).resolves.toHaveLength(1);
     expect(db.createSource).toHaveBeenCalledWith("camp_1", buildSourceInput());
     expect(db.listSources).toHaveBeenCalledWith("camp_1");
   });
 });
 
 describe("DraftsController", () => {
-  it("lists drafts with optional status parsing", () => {
+  it("lists drafts with optional status parsing", async () => {
     const db = { listDrafts: vi.fn().mockReturnValue([buildPostDraft()]) };
     const controller = new DraftsController(db as never, {} as never);
 
-    expect(controller.list("PENDING_APPROVAL")).toHaveLength(1);
+    await expect(controller.list("PENDING_APPROVAL")).resolves.toHaveLength(1);
     expect(db.listDrafts).toHaveBeenCalledWith("PENDING_APPROVAL");
-    expect(() => controller.list("INVALID" as never)).toThrow();
+    await expect(controller.list("INVALID" as never)).rejects.toThrow();
   });
 
   it("approves and publishes drafts", async () => {
@@ -67,13 +67,13 @@ describe("DraftsController", () => {
     expect(publisher.publishDraft).toHaveBeenCalledWith("draft_1", { dryRun: true });
   });
 
-  it("rejects drafts without publishing", () => {
+  it("rejects drafts without publishing", async () => {
     const rejected = buildPostDraft({ status: "REJECTED", approvalStatus: "REJECTED" });
     const db = { updateDraftStatus: vi.fn().mockReturnValue(rejected) };
     const publisher = { publishDraft: vi.fn() };
     const controller = new DraftsController(db as never, publisher as never);
 
-    expect(controller.reject("draft_1")).toEqual(rejected);
+    await expect(controller.reject("draft_1")).resolves.toEqual(rejected);
     expect(db.updateDraftStatus).toHaveBeenCalledWith("draft_1", "REJECTED", "REJECTED");
     expect(publisher.publishDraft).not.toHaveBeenCalled();
   });
@@ -87,7 +87,7 @@ describe("PublishingController", () => {
     const controller = new PublishingController(publisher as never, db as never);
 
     await expect(controller.publish("draft_1", { dryRun: true })).resolves.toEqual(publishedPost);
-    expect(controller.list()).toEqual([publishedPost]);
+    await expect(controller.list()).resolves.toEqual([publishedPost]);
     expect(publisher.publishDraft).toHaveBeenCalledWith("draft_1", { dryRun: true });
   });
 });
@@ -100,7 +100,7 @@ describe("AgentRunsController", () => {
     const controller = new AgentRunsController(workflow as never, db as never);
 
     await expect(controller.run("camp_1")).resolves.toEqual(workflowState);
-    expect(controller.list("camp_1")).toHaveLength(1);
+    await expect(controller.list("camp_1")).resolves.toHaveLength(1);
     expect(workflow.run).toHaveBeenCalledWith("camp_1");
     expect(db.listAgentRuns).toHaveBeenCalledWith("camp_1");
   });
