@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-export function invalidateDashboardData(queryClient: QueryClient) {
-  return Promise.all([
+export async function invalidateDashboardData(queryClient: QueryClient): Promise<void> {
+  await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
     queryClient.invalidateQueries({ queryKey: ["sources"] }),
     queryClient.invalidateQueries({ queryKey: ["drafts"] }),
@@ -10,8 +10,8 @@ export function invalidateDashboardData(queryClient: QueryClient) {
   ]);
 }
 
-export function invalidateAgentRunsData(queryClient: QueryClient) {
-  return Promise.all([
+export async function invalidateAgentRunsData(queryClient: QueryClient): Promise<void> {
+  await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
     queryClient.invalidateQueries({ queryKey: ["agent-workflow-runs"] }),
     queryClient.invalidateQueries({ queryKey: ["agent-runs"] }),

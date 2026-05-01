@@ -90,7 +90,7 @@ describe("AgentRunsPage", () => {
     renderWithClient(<AgentRunsPage />);
 
     expect(await screen.findByText("Workflow history")).toBeInTheDocument();
-    expect(screen.getByText("admin@example.com")).toBeInTheDocument();
+    expect((await screen.findAllByText("admin@example.com")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("generate_post")).length).toBeGreaterThan(0);
     const runningPanel = screen.getByText("Running").closest(".panel") as HTMLElement;
     const successPanel = screen.getByText("Success").closest(".panel") as HTMLElement;

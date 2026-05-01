@@ -50,7 +50,7 @@ export function AdminHeader() {
 
 function NavButton({
   children,
-  end,
+  end = false,
   icon,
   to
 }: {
