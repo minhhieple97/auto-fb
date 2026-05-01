@@ -65,4 +65,25 @@ describe("api client auth headers", () => {
     await expect(api.me()).resolves.toMatchObject({ email: "admin@example.com", role: "owner" });
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/auth/me");
   });
+
+  it("posts search agent requests under the selected campaign", async () => {
+    authTokenMock.mockReturnValue("jwt-1");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          query: "AI automation",
+          provider: "gemini",
+          model: "gemini-2.5-flash",
+          searchQueries: ["AI automation"],
+          results: []
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+
+    await api.searchAgent("camp_1", { query: "AI automation", limit: 10, provider: "gemini", model: "gemini-2.5-flash" });
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/campaigns/camp_1/agent-search/search");
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe("POST");
+  });
 });

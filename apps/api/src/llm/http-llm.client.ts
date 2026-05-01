@@ -1,6 +1,6 @@
 import { llmProviders, type LlmProvider } from "@auto-fb/shared";
 import { llmDefaults, llmEndpoints } from "./llm.constants.js";
-import type { GeneratePostInput, GeneratePostResult, LlmClient } from "./llm.types.js";
+import type { GeneratePostInput, GeneratePostResult, LlmClient, SearchContentInput, SearchContentResult } from "./llm.types.js";
 
 type HttpClientOptions = {
   provider: LlmProvider;
@@ -18,6 +18,13 @@ export class HttpLlmClient implements LlmClient {
       return this.callGemini(input);
     }
     return this.callOpenAiCompatible(input);
+  }
+
+  async searchContent(input: SearchContentInput): Promise<SearchContentResult> {
+    if (this.options.provider !== llmProviders.gemini) {
+      throw new Error(`Search agent is not supported for ${this.options.provider}`);
+    }
+    return this.callGeminiSearch(input);
   }
 
   private async callOpenAiCompatible(input: GeneratePostInput): Promise<GeneratePostResult> {
@@ -92,7 +99,64 @@ export class HttpLlmClient implements LlmClient {
       model: input.model
     };
   }
+
+  private async callGeminiSearch(input: SearchContentInput): Promise<SearchContentResult> {
+    const response = await fetch(
+      llmEndpoints.googleGenerateContent(input.model, this.options.apiKey),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: buildSearchPrompt(input) }] }],
+          tools: [{ google_search: {} }]
+        })
+      }
+    );
+    const payload = (await response.json()) as GeminiGenerateContentResponse;
+    if (!response.ok) throw new Error(payload.error?.message ?? `Gemini returned ${response.status}`);
+
+    const candidate = payload.candidates?.[0];
+    return {
+      query: input.query,
+      provider: input.provider,
+      model: input.model,
+      searchQueries: candidate?.groundingMetadata?.webSearchQueries ?? [input.query],
+      results: buildGroundedSearchResults(candidate, input.limit),
+      ...(candidate?.groundingMetadata?.searchEntryPoint?.renderedContent
+        ? { searchEntryPointHtml: candidate.groundingMetadata.searchEntryPoint.renderedContent }
+        : {})
+    };
+  }
 }
+
+type GeminiGenerateContentResponse = {
+  candidates?: GeminiCandidate[];
+  error?: { message?: string };
+};
+
+type GeminiCandidate = {
+  content?: {
+    parts?: Array<{ text?: string }>;
+  };
+  groundingMetadata?: {
+    webSearchQueries?: string[];
+    searchEntryPoint?: {
+      renderedContent?: string;
+    };
+    groundingChunks?: Array<{
+      web?: {
+        uri?: string;
+        title?: string;
+      };
+    }>;
+    groundingSupports?: Array<{
+      segment?: {
+        text?: string;
+      };
+      groundingChunkIndices?: number[];
+    }>;
+  };
+};
 
 function buildSystemPrompt(input: GeneratePostInput): string {
   return [
@@ -104,11 +168,66 @@ function buildSystemPrompt(input: GeneratePostInput): string {
 }
 
 function buildUserPrompt(input: GeneratePostInput): string {
-  return [
+  const prompt = [
     `Topic: ${input.topic}`,
     `Summary: ${input.summary}`,
     `Key facts:\n${input.keyFacts.map((fact) => `- ${fact}`).join("\n")}`,
     `Source URL: ${input.sourceUrl}`,
     "Create one Facebook post. Keep it concise and useful."
+  ];
+  if (input.instructions) {
+    prompt.push(`Additional instructions: ${input.instructions}`);
+  }
+  return prompt.join("\n\n");
+}
+
+function buildSearchPrompt(input: SearchContentInput): string {
+  return [
+    `Search the web for useful source pages about: ${input.query}`,
+    `Find up to ${input.limit} highly relevant candidate sources for a Facebook Page post.`,
+    "Prioritize credible primary or reputable sources, recent information when timing matters, and direct relevance.",
+    "Do not write the Facebook post yet. Return a concise ranked source list with one-sentence context for each result."
   ].join("\n\n");
+}
+
+function buildGroundedSearchResults(candidate: GeminiCandidate | undefined, limit: number): SearchContentResult["results"] {
+  const chunks = candidate?.groundingMetadata?.groundingChunks ?? [];
+  const supports = candidate?.groundingMetadata?.groundingSupports ?? [];
+  const seenUrls = new Set<string>();
+  const results: SearchContentResult["results"] = [];
+
+  for (let index = 0; index < chunks.length && results.length < limit; index += 1) {
+    const web = chunks[index]?.web;
+    const url = web?.uri;
+    if (!url || seenUrls.has(url)) continue;
+
+    seenUrls.add(url);
+    const title = sanitizeText(web?.title) || hostFromUrl(url);
+    results.push({
+      id: `result-${results.length + 1}`,
+      title,
+      url,
+      snippet: snippetForChunk(index, supports),
+      sourceName: hostFromUrl(url)
+    });
+  }
+
+  return results;
+}
+
+function snippetForChunk(chunkIndex: number, supports: NonNullable<GeminiCandidate["groundingMetadata"]>["groundingSupports"] = []): string {
+  const support = supports.find((item) => item.groundingChunkIndices?.includes(chunkIndex) && item.segment?.text);
+  return sanitizeText(support?.segment?.text);
+}
+
+function sanitizeText(value: string | undefined): string {
+  return value?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function hostFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }

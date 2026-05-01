@@ -3,9 +3,13 @@ import { create } from "zustand";
 type AdminState = {
   selectedCampaignId: string | undefined;
   setSelectedCampaignId: (id: string | undefined) => void;
+  selectedFanpageId: string | undefined;
+  setSelectedFanpageId: (id: string | undefined) => void;
 };
 
 export const useAdminStore = create<AdminState>((set) => ({
   selectedCampaignId: undefined,
-  setSelectedCampaignId: (id) => set({ selectedCampaignId: id })
+  setSelectedCampaignId: (id) => set({ selectedCampaignId: id }),
+  selectedFanpageId: undefined,
+  setSelectedFanpageId: (id) => set({ selectedFanpageId: id })
 }));

@@ -13,11 +13,14 @@ type DraftInboxProps = {
 export function DraftInbox({ canReview = true, drafts, onChanged }: DraftInboxProps) {
   const queryClient = useQueryClient();
   const approve = useMutation({
-    mutationFn: api.approveDraft,
+    mutationFn: ({ id, confirmProduction }: { id: string; confirmProduction?: boolean }) =>
+      api.approveDraft(id, {
+        ...(confirmProduction ? { confirmProduction } : {})
+      }),
     onSuccess: () =>
       Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.publishedPosts }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.draftsRoot }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.publishedPostsRoot }),
         onChanged()
       ])
   });
@@ -25,11 +28,19 @@ export function DraftInbox({ canReview = true, drafts, onChanged }: DraftInboxPr
     mutationFn: api.rejectDraft,
     onSuccess: () =>
       Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.publishedPosts }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.draftsRoot }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.publishedPostsRoot }),
         onChanged()
       ])
   });
+
+  function approveDraft(draft: PostDraft) {
+    const isProduction = draft.fanpage?.environment === "production";
+    if (isProduction && !window.confirm(`Publish approved draft to production fanpage ${draft.fanpage?.name ?? draft.fanpage?.facebookPageId}?`)) {
+      return;
+    }
+    approve.mutate({ id: draft.id, ...(isProduction ? { confirmProduction: true } : {}) });
+  }
 
   return (
     <div className="panel p-4">
@@ -53,6 +64,11 @@ export function DraftInbox({ canReview = true, drafts, onChanged }: DraftInboxPr
               )}
             </div>
             <div className="mb-3 flex flex-wrap gap-2 text-xs">
+              {draft.fanpage ? (
+                <span className="rounded bg-slate-100 px-2 py-1">
+                  {draft.fanpage.name} - {draft.fanpage.environment === "sandbox" ? "Sandbox" : "Production"}
+                </span>
+              ) : null}
               <span className="rounded bg-slate-100 px-2 py-1">Risk {draft.riskScore}</span>
               {draft.riskFlags.map((flag) => (
                 <span className="rounded bg-amber-100 px-2 py-1 text-warn" key={flag}>
@@ -62,7 +78,7 @@ export function DraftInbox({ canReview = true, drafts, onChanged }: DraftInboxPr
             </div>
             {canReview ? (
               <div className="flex gap-2">
-                <button className="button bg-action text-white" onClick={() => approve.mutate(draft.id)} title="Approve and publish dry run">
+                <button className="button bg-action text-white" onClick={() => approveDraft(draft)} title="Approve and publish">
                   <Check size={16} />
                   Approve
                 </button>

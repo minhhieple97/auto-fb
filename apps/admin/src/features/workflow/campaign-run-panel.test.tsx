@@ -7,27 +7,27 @@ import { CampaignRunPanel } from "./campaign-run-panel.js";
 
 vi.mock("../../lib/api-client.js", () => ({
   api: {
-    runWorkflow: vi.fn()
+    runFanpageWorkflow: vi.fn()
   }
 }));
 
-const runWorkflow = vi.mocked(api.runWorkflow);
+const runFanpageWorkflow = vi.mocked(api.runFanpageWorkflow);
 
 describe("CampaignRunPanel", () => {
   beforeEach(() => {
-    runWorkflow.mockReset();
+    runFanpageWorkflow.mockReset();
   });
 
   it("does not allow agent runs without a selected campaign", () => {
-    renderWithClient(<CampaignRunPanel campaignId={undefined} />);
+    renderWithClient(<CampaignRunPanel fanpageId={undefined} />);
 
-    expect(screen.getByText("No campaign selected")).toBeInTheDocument();
+    expect(screen.getByText("No fanpage selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /run agents/i })).toBeDisabled();
   });
 
   it("starts the controlled workflow and refreshes generated artifacts", async () => {
     const user = userEvent.setup();
-    runWorkflow.mockResolvedValue({
+    runFanpageWorkflow.mockResolvedValue({
       id: "workflow-run-1",
       campaignId: "campaign-1",
       graphRunId: "graph-1",
@@ -36,12 +36,12 @@ describe("CampaignRunPanel", () => {
       createdAt: "2026-05-01T00:00:00.000Z",
       steps: []
     });
-    const { queryClient } = renderWithClient(<CampaignRunPanel campaignId="campaign-1" />);
+    const { queryClient } = renderWithClient(<CampaignRunPanel fanpageId="fanpage-1" fanpageName="Launch" />);
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
     await user.click(screen.getByRole("button", { name: /run agents/i }));
 
-    await waitFor(() => expect(runWorkflow).toHaveBeenCalledWith("campaign-1"));
+    await waitFor(() => expect(runFanpageWorkflow).toHaveBeenCalledWith("fanpage-1"));
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drafts"] }));
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["agent-runs"] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["agent-workflow-runs"] });
@@ -49,11 +49,11 @@ describe("CampaignRunPanel", () => {
 
   it("disables workflow runs without permission", async () => {
     const user = userEvent.setup();
-    renderWithClient(<CampaignRunPanel canRun={false} campaignId="campaign-1" />);
+    renderWithClient(<CampaignRunPanel canRun={false} fanpageId="fanpage-1" />);
 
     const button = screen.getByRole("button", { name: /run agents/i });
     expect(button).toBeDisabled();
     await user.click(button);
-    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(runFanpageWorkflow).not.toHaveBeenCalled();
   });
 });

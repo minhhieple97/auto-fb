@@ -13,33 +13,46 @@ import { DraftInbox } from "../drafts/draft-inbox.js";
 import { PublishedHistory } from "../published-posts/published-history.js";
 import { SourcePanel } from "../sources/source-panel.js";
 import { CampaignRunPanel } from "../workflow/campaign-run-panel.js";
+import { SearchAgentPanel } from "../workflow/search-agent-panel.js";
 import { api } from "../../lib/api-client.js";
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
-  const selectedCampaignId = useAdminStore((state) => state.selectedCampaignId);
+  const selectedFanpageId = useAdminStore((state) => state.selectedFanpageId);
+  const setSelectedFanpageId = useAdminStore((state) => state.setSelectedFanpageId);
   const setSelectedCampaignId = useAdminStore((state) => state.setSelectedCampaignId);
-  const campaigns = useQuery({ queryKey: queryKeys.campaigns, queryFn: api.campaigns });
+  const fanpages = useQuery({ queryKey: queryKeys.fanpages, queryFn: api.fanpages });
+  const selectedFanpage = fanpages.data?.find((fanpage) => fanpage.id === selectedFanpageId);
+  const selectedCampaignId = selectedFanpage?.campaignId;
   const sources = useQuery({
-    queryKey: queryKeys.sources(selectedCampaignId),
-    queryFn: () => api.sources(selectedCampaignId!),
-    enabled: Boolean(selectedCampaignId)
+    queryKey: queryKeys.sources(selectedFanpageId),
+    queryFn: () => api.fanpageSources(selectedFanpageId!),
+    enabled: Boolean(selectedFanpageId)
   });
-  const drafts = useQuery({ queryKey: queryKeys.drafts, queryFn: api.drafts });
+  const drafts = useQuery({ queryKey: queryKeys.drafts(selectedFanpageId), queryFn: () => api.drafts(selectedFanpageId) });
   const agentRuns = useQuery({
     queryKey: queryKeys.agentRuns(selectedCampaignId),
     queryFn: () => api.agentRuns(selectedCampaignId ? { campaignId: selectedCampaignId } : {}),
     enabled: Boolean(selectedCampaignId)
   });
-  const publishedPosts = useQuery({ queryKey: queryKeys.publishedPosts, queryFn: api.publishedPosts });
+  const publishedPosts = useQuery({
+    queryKey: queryKeys.publishedPosts(selectedFanpageId),
+    queryFn: () => api.publishedPosts(selectedFanpageId)
+  });
 
   useEffect(() => {
-    if (!selectedCampaignId && campaigns.data?.[0]) {
-      setSelectedCampaignId(campaigns.data[0].id);
+    if (!selectedFanpageId && fanpages.data?.[0]) {
+      setSelectedFanpageId(fanpages.data[0].id);
+      setSelectedCampaignId(fanpages.data[0].campaignId);
     }
-  }, [campaigns.data, selectedCampaignId, setSelectedCampaignId]);
+  }, [fanpages.data, selectedFanpageId, setSelectedCampaignId, setSelectedFanpageId]);
+
+  function selectFanpage(id: string) {
+    setSelectedFanpageId(id);
+    setSelectedCampaignId(fanpages.data?.find((fanpage) => fanpage.id === id)?.campaignId);
+  }
 
   const refreshDashboard = () => invalidateDashboardData(queryClient);
   const canManageCampaigns = hasPermission(adminPermissions.manageCampaigns);
@@ -52,15 +65,16 @@ export function DashboardPage() {
       <aside className="space-y-4">
         <CampaignPanel
           canCreate={canManageCampaigns}
-          selectedCampaignId={selectedCampaignId}
-          onSelect={setSelectedCampaignId}
-          onCreated={setSelectedCampaignId}
+          selectedFanpageId={selectedFanpageId}
+          onSelect={selectFanpage}
+          onCreated={selectFanpage}
         />
-        <SourcePanel canCreate={canManageSources} campaignId={selectedCampaignId} sources={sources.data ?? []} />
+        <SourcePanel canCreate={canManageSources} fanpageId={selectedFanpageId} sources={sources.data ?? []} />
       </aside>
 
       <section className="space-y-4">
-        <CampaignRunPanel canRun={canRunWorkflow} campaignId={selectedCampaignId} />
+        <CampaignRunPanel canRun={canRunWorkflow} fanpageId={selectedFanpageId} fanpageName={selectedFanpage?.name} />
+        <SearchAgentPanel canRun={canRunWorkflow} campaignId={selectedCampaignId} onGenerated={refreshDashboard} />
         <DraftInbox canReview={canReviewDrafts} drafts={drafts.data ?? []} onChanged={refreshDashboard} />
         <AgentTimeline runs={agentRuns.data ?? []} onOpenDetails={() => navigate(adminRoutes.agentRuns)} />
         <PublishedHistory posts={publishedPosts.data ?? []} />

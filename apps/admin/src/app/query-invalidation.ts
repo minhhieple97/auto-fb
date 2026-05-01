@@ -5,19 +5,21 @@ import { adminRoutes } from "./routes.js";
 export async function invalidateDashboardData(queryClient: QueryClient): Promise<void> {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.campaigns }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.fanpages }),
     queryClient.invalidateQueries({ queryKey: queryKeys.sourcesRoot }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.draftsRoot }),
     queryClient.invalidateQueries({ queryKey: queryKeys.agentRunsRoot }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.publishedPosts })
+    queryClient.invalidateQueries({ queryKey: queryKeys.publishedPostsRoot })
   ]);
 }
 
 export async function invalidateAgentRunsData(queryClient: QueryClient): Promise<void> {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.campaigns }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.fanpages }),
     queryClient.invalidateQueries({ queryKey: queryKeys.agentWorkflowRunsRoot }),
     queryClient.invalidateQueries({ queryKey: queryKeys.agentRunsRoot }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.drafts })
+    queryClient.invalidateQueries({ queryKey: queryKeys.draftsRoot })
   ]);
 }
 

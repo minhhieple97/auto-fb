@@ -45,6 +45,19 @@ describe("MockLlmClient", () => {
     expect(result.text).not.toContain("Fact four");
     expect(result.text).toContain("Nguon: https://example.com/story");
   });
+
+  it("generates deterministic search results for local flows", async () => {
+    const result = await new MockLlmClient().searchContent({
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      query: "AI automation",
+      limit: 2
+    });
+
+    expect(result).toMatchObject({ provider: "mock", model: "mock-copywriter-v1", searchQueries: ["AI automation"] });
+    expect(result.results).toHaveLength(2);
+    expect(result.results[0]).toMatchObject({ title: "Mock source 1 for AI automation", url: "https://example.com/search/1" });
+  });
 });
 
 describe("LlmService", () => {
@@ -144,6 +157,60 @@ describe("HttpLlmClient", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=gemini_key"
     );
+  });
+
+  it("calls Gemini generateContent API with Google Search grounding for search results", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        candidates: [
+          {
+            content: { parts: [{ text: "1. Example story" }] },
+            groundingMetadata: {
+              webSearchQueries: ["AI automation"],
+              searchEntryPoint: { renderedContent: "<div>Search suggestions</div>" },
+              groundingChunks: [{ web: { uri: "https://example.com/story", title: "Example Story" } }],
+              groundingSupports: [{ segment: { text: "Example support text." }, groundingChunkIndices: [0] }]
+            }
+          }
+        ]
+      })
+    );
+
+    const result = await new HttpLlmClient({ provider: "gemini", apiKey: "gemini_key" }).searchContent({
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      query: "AI automation",
+      limit: 10
+    });
+
+    expect(result).toMatchObject({
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      searchQueries: ["AI automation"],
+      searchEntryPointHtml: "<div>Search suggestions</div>",
+      results: [
+        {
+          id: "result-1",
+          title: "Example Story",
+          url: "https://example.com/story",
+          snippet: "Example support text.",
+          sourceName: "example.com"
+        }
+      ]
+    });
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body.tools).toEqual([{ google_search: {} }]);
+  });
+
+  it("rejects search for HTTP providers without search support", async () => {
+    await expect(
+      new HttpLlmClient({ provider: "openai", apiKey: "sk_test" }).searchContent({
+        provider: "openai",
+        model: "gpt-4o-mini",
+        query: "AI automation",
+        limit: 10
+      })
+    ).rejects.toThrow("Search agent is not supported for openai");
   });
 
   it("throws provider error messages from non-OK responses", async () => {

@@ -183,6 +183,86 @@ export type Database = {
         }
         Relationships: []
       }
+      facebook_pages: {
+        Row: {
+          brand_voice: string
+          campaign_id: string
+          created_at: string
+          encrypted_page_access_token: string | null
+          environment: string
+          facebook_page_id: string
+          id: string
+          language: string
+          last_scheduled_at: string | null
+          llm_model: string
+          llm_provider: string
+          name: string
+          page_access_token_mask: string | null
+          schedule_enabled: boolean
+          schedule_interval_minutes: number
+          schedule_posts_per_day: number
+          schedule_start_time_local: string
+          schedule_timezone: string
+          status: string
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          brand_voice: string
+          campaign_id: string
+          created_at: string
+          encrypted_page_access_token?: string | null
+          environment?: string
+          facebook_page_id: string
+          id?: string
+          language: string
+          last_scheduled_at?: string | null
+          llm_model: string
+          llm_provider: string
+          name: string
+          page_access_token_mask?: string | null
+          schedule_enabled?: boolean
+          schedule_interval_minutes?: number
+          schedule_posts_per_day?: number
+          schedule_start_time_local?: string
+          schedule_timezone?: string
+          status?: string
+          topic: string
+          updated_at: string
+        }
+        Update: {
+          brand_voice?: string
+          campaign_id?: string
+          created_at?: string
+          encrypted_page_access_token?: string | null
+          environment?: string
+          facebook_page_id?: string
+          id?: string
+          language?: string
+          last_scheduled_at?: string | null
+          llm_model?: string
+          llm_provider?: string
+          name?: string
+          page_access_token_mask?: string | null
+          schedule_enabled?: boolean
+          schedule_interval_minutes?: number
+          schedule_posts_per_day?: number
+          schedule_start_time_local?: string
+          schedule_timezone?: string
+          status?: string
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facebook_pages_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: true
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_items: {
         Row: {
           campaign_id: string

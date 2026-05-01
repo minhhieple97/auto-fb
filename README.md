@@ -5,7 +5,7 @@ Fullstack local MVP for a controlled multi-agent Facebook Page publishing workfl
 ## What Is Included
 
 - `apps/api`: NestJS REST API, LangGraph multi-agent workflow, source adapters, R2 storage service, Meta publisher with dry-run default.
-- `apps/admin`: React/Vite dashboard for campaigns, sources, agent timeline, approval inbox, and published history.
+- `apps/admin`: React/Vite dashboard for fanpages, sources, agent timeline, approval inbox, and published history.
 - `packages/shared`: shared Zod schemas, DTOs, enums, and API contracts.
 - `infra/schema.sql`: Supabase/PostgreSQL schema matching the MVP data model.
 - `docker-compose.yml`: Redis for local queue infra when Docker is available.
@@ -62,8 +62,9 @@ Important values:
 - `SUPABASE_PROJECT_REF`: Supabase project ref used by local CLI scripts, defaults to `oargectikpgjmzmotdmp` in package scripts.
 - `SUPABASE_SECRET_KEY`: server-only Supabase secret key used by the API. Legacy `SUPABASE_SERVICE_ROLE_KEY` is also accepted, but do not expose either key to the admin/browser bundle.
 - `SUPABASE_SCHEMA`: optional Postgres schema, defaults to `public`.
-- `META_PAGE_ACCESS_TOKEN`: required for real Facebook publishing.
-- `PUBLISH_DRY_RUN=false`: enables real Meta Graph API calls.
+- `FACEBOOK_PAGE_TOKEN_ENCRYPTION_KEY`: server-only secret used to encrypt per-fanpage Page Access Tokens. Required when `NODE_ENV=production`.
+- `META_PAGE_ACCESS_TOKEN`: legacy fallback for real Facebook publishing when a draft belongs to an old campaign without a linked fanpage.
+- `PUBLISH_DRY_RUN=false`: enables real Meta Graph API calls. Production fanpage publishing also requires an explicit approval confirmation from the admin request.
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE_URL`: required for real R2 image upload and real image publishing.
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`: optional LLM provider keys. Local/test mode falls back to `mock` when a key is missing.
 
@@ -79,6 +80,7 @@ pnpm lint
 ## Current MVP Limits
 
 - Human approval is mandatory before publish.
+- Sandbox publishing uses the same Meta Graph API endpoints as production; configure a sandbox fanpage with a Meta test Page ID and that Page's Page Access Token.
 - Sources are limited to whitelisted RSS, JSON API, and static HTML.
 - Posts support text plus one image.
 - Dedupe is normalized content hash only; vector memory is an interface-level future extension.

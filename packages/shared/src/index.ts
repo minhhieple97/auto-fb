@@ -9,6 +9,12 @@ export const campaignStatuses = {
 } as const;
 export const campaignStatusValues = [campaignStatuses.active, campaignStatuses.paused, campaignStatuses.archived] as const;
 
+export const fanpageEnvironments = {
+  sandbox: "sandbox",
+  production: "production"
+} as const;
+export const fanpageEnvironmentValues = [fanpageEnvironments.sandbox, fanpageEnvironments.production] as const;
+
 export const sourceTypes = {
   rss: "rss",
   api: "api",
@@ -72,6 +78,7 @@ export const agentWorkflowNodes = {
   discoverSources: "discover_sources",
   collectContent: "collect_content",
   understandContent: "understand_content",
+  searchContent: "search_content",
   generatePost: "generate_post",
   prepareImage: "prepare_image",
   qaCheck: "qa_check",
@@ -82,6 +89,7 @@ export const agentWorkflowNodeNames = [
   agentWorkflowNodes.discoverSources,
   agentWorkflowNodes.collectContent,
   agentWorkflowNodes.understandContent,
+  agentWorkflowNodes.searchContent,
   agentWorkflowNodes.generatePost,
   agentWorkflowNodes.prepareImage,
   agentWorkflowNodes.qaCheck,
@@ -94,18 +102,25 @@ export const agentWorkflowRunEventTypes = {
 
 export const apiPathSegments = {
   agentRuns: "agent-runs",
+  agentSearch: "agent-search",
   agentWorkflowRuns: "agent-workflow-runs",
   approve: "approve",
   auth: "auth",
   campaigns: "campaigns",
   drafts: "drafts",
+  fanpages: "fanpages",
   me: "me",
   publishedPosts: "published-posts",
   publish: "publish",
   reject: "reject",
   runs: "runs",
+  schedule: "schedule",
+  generate: "generate",
+  search: "search",
   sources: "sources",
-  stream: "stream"
+  stream: "stream",
+  testConnection: "test-connection",
+  token: "token"
 } as const;
 
 export const appRoles = {
@@ -144,6 +159,12 @@ export const workflowRunListLimits = {
   max: 100
 } as const;
 
+export const agentSearchResultLimits = {
+  default: 10,
+  min: 1,
+  max: 20
+} as const;
+
 export const postDraftRiskScoreLimits = {
   min: 0,
   max: 100
@@ -156,6 +177,27 @@ export const campaignDefaults = {
   llmModel: "gpt-4o-mini"
 } as const;
 
+export const fanpageScheduleDefaults = {
+  enabled: false,
+  postsPerDay: 1,
+  intervalMinutes: 1440,
+  startTimeLocal: "09:00",
+  timezone: "Asia/Saigon"
+} as const;
+
+export const fanpageScheduleLimits = {
+  postsPerDayMin: 1,
+  postsPerDayMax: 24,
+  intervalMinutesMin: 5,
+  intervalMinutesMax: 1440
+} as const;
+
+export const agentSearchDefaults = {
+  provider: llmProviders.gemini,
+  model: "gemini-2.5-flash",
+  resultLimit: agentSearchResultLimits.default
+} as const;
+
 export const sourceDefaults = {
   type: sourceTypes.rss,
   crawlPolicy: "whitelist_only",
@@ -163,6 +205,7 @@ export const sourceDefaults = {
 } as const;
 
 export const campaignStatusSchema = z.enum(campaignStatusValues);
+export const fanpageEnvironmentSchema = z.enum(fanpageEnvironmentValues);
 export const sourceTypeSchema = z.enum(sourceTypeValues);
 export const llmProviderSchema = z.enum(llmProviderValues);
 export const draftStatusSchema = z.enum(draftStatusValues);
@@ -175,6 +218,7 @@ export const adminUserStatusSchema = z.enum(adminUserStatusValues);
 export const adminPermissionSchema = z.enum(adminPermissionValues);
 
 export type CampaignStatus = z.infer<typeof campaignStatusSchema>;
+export type FanpageEnvironment = z.infer<typeof fanpageEnvironmentSchema>;
 export type SourceType = z.infer<typeof sourceTypeSchema>;
 export type LlmProvider = z.infer<typeof llmProviderSchema>;
 export type DraftStatus = z.infer<typeof draftStatusSchema>;
@@ -218,7 +262,7 @@ export function roleHasPermission(role: AppRole, permission: AdminPermission): b
 export const llmProviderModels = {
   openai: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"],
   anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest"],
-  gemini: ["gemini-1.5-flash", "gemini-1.5-pro"],
+  gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
   deepseek: ["deepseek-chat", "deepseek-reasoner"],
   mock: ["mock-copywriter-v1"]
 } as const satisfies Record<LlmProvider, readonly string[]>;
@@ -237,6 +281,50 @@ export const campaignSchema = z.object({
   updatedAt: z.string()
 });
 
+export const fanpageScheduleConfigSchema = z.object({
+  enabled: z.boolean().default(fanpageScheduleDefaults.enabled),
+  postsPerDay: z
+    .number()
+    .int()
+    .min(fanpageScheduleLimits.postsPerDayMin)
+    .max(fanpageScheduleLimits.postsPerDayMax)
+    .default(fanpageScheduleDefaults.postsPerDay),
+  intervalMinutes: z
+    .number()
+    .int()
+    .min(fanpageScheduleLimits.intervalMinutesMin)
+    .max(fanpageScheduleLimits.intervalMinutesMax)
+    .default(fanpageScheduleDefaults.intervalMinutes),
+  startTimeLocal: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .default(fanpageScheduleDefaults.startTimeLocal),
+  timezone: z.string().trim().min(1).default(fanpageScheduleDefaults.timezone)
+});
+
+export const fanpageSummarySchema = z.object({
+  id: z.string(),
+  campaignId: z.string(),
+  name: z.string(),
+  facebookPageId: z.string(),
+  environment: fanpageEnvironmentSchema,
+  status: campaignStatusSchema
+});
+
+export const fanpageSchema = fanpageSummarySchema.extend({
+  topic: z.string(),
+  language: z.string(),
+  brandVoice: z.string(),
+  llmProvider: llmProviderSchema,
+  llmModel: z.string(),
+  scheduleConfig: fanpageScheduleConfigSchema,
+  hasPageAccessToken: z.boolean(),
+  pageAccessTokenMask: z.string().optional(),
+  lastScheduledAt: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
 export const createCampaignSchema = z.object({
   name: z.string().min(2),
   topic: z.string().min(2),
@@ -250,6 +338,37 @@ export const createCampaignSchema = z.object({
 export const updateCampaignSchema = createCampaignSchema
   .partial()
   .extend({ status: campaignStatusSchema.optional() });
+
+export const createFanpageSchema = z.object({
+  name: z.string().trim().min(2),
+  facebookPageId: z.string().trim().min(1),
+  environment: fanpageEnvironmentSchema.default(fanpageEnvironments.sandbox),
+  topic: z.string().trim().min(2),
+  language: z.string().trim().min(2).default(campaignDefaults.language),
+  brandVoice: z.string().trim().min(2).default(campaignDefaults.brandVoice),
+  llmProvider: llmProviderSchema.default(campaignDefaults.llmProvider),
+  llmModel: z.string().trim().min(1).default(campaignDefaults.llmModel),
+  scheduleConfig: fanpageScheduleConfigSchema.default(fanpageScheduleDefaults),
+  pageAccessToken: z.string().trim().min(1).optional()
+});
+
+export const updateFanpageSchema = createFanpageSchema.partial().extend({
+  status: campaignStatusSchema.optional(),
+  scheduleConfig: fanpageScheduleConfigSchema.optional()
+});
+
+export const updateFanpageScheduleSchema = fanpageScheduleConfigSchema;
+
+export const updateFanpageTokenSchema = z.object({
+  pageAccessToken: z.string().trim().min(1)
+});
+
+export const testFanpageConnectionResponseSchema = z.object({
+  ok: z.boolean(),
+  facebookPageId: z.string(),
+  environment: fanpageEnvironmentSchema,
+  pageName: z.string().optional()
+});
 
 export const sourceSchema = z.object({
   id: z.string(),
@@ -304,7 +423,8 @@ export const postDraftSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   contentItem: contentItemSchema.optional(),
-  imageAsset: imageAssetSchema.optional()
+  imageAsset: imageAssetSchema.optional(),
+  fanpage: fanpageSummarySchema.optional()
 });
 
 export const agentRunSchema = z.object({
@@ -355,16 +475,68 @@ export const publishedPostSchema = z.object({
   publishPayload: z.unknown(),
   errorMessage: z.string().optional(),
   publishedAt: z.string().optional(),
-  createdAt: z.string()
+  createdAt: z.string(),
+  fanpage: fanpageSummarySchema.optional()
 });
 
 export const publishOptionsSchema = z.object({
-  dryRun: z.boolean().optional()
+  dryRun: z.boolean().optional(),
+  confirmProduction: z.boolean().optional()
+});
+
+export const agentSearchResultSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  url: z.string().url(),
+  snippet: z.string(),
+  sourceName: z.string().optional()
+});
+
+export const agentSearchInputSchema = z.object({
+  query: z.string().trim().min(2),
+  limit: z
+    .number()
+    .int()
+    .min(agentSearchResultLimits.min)
+    .max(agentSearchResultLimits.max)
+    .default(agentSearchDefaults.resultLimit),
+  provider: llmProviderSchema.default(agentSearchDefaults.provider),
+  model: z.string().min(1).default(agentSearchDefaults.model)
+});
+
+export const agentSearchResponseSchema = z.object({
+  query: z.string(),
+  provider: llmProviderSchema,
+  model: z.string(),
+  searchQueries: z.array(z.string()),
+  results: z.array(agentSearchResultSchema),
+  searchEntryPointHtml: z.string().optional()
+});
+
+export const generateFromSearchInputSchema = z.object({
+  selectedResults: z.array(agentSearchResultSchema).min(1).max(agentSearchResultLimits.max),
+  instructions: z.string().trim().max(1000).optional(),
+  provider: llmProviderSchema.default(agentSearchDefaults.provider),
+  model: z.string().min(1).default(agentSearchDefaults.model)
+});
+
+export const generateFromSearchResponseSchema = z.object({
+  draft: postDraftSchema,
+  contentItem: contentItemSchema,
+  duplicate: z.boolean()
 });
 
 export type Campaign = z.infer<typeof campaignSchema>;
+export type FanpageScheduleConfig = z.infer<typeof fanpageScheduleConfigSchema>;
+export type FanpageSummary = z.infer<typeof fanpageSummarySchema>;
+export type Fanpage = z.infer<typeof fanpageSchema>;
 export type CreateCampaignInput = z.infer<typeof createCampaignSchema>;
 export type UpdateCampaignInput = z.infer<typeof updateCampaignSchema>;
+export type CreateFanpageInput = z.infer<typeof createFanpageSchema>;
+export type UpdateFanpageInput = z.infer<typeof updateFanpageSchema>;
+export type UpdateFanpageScheduleInput = z.infer<typeof updateFanpageScheduleSchema>;
+export type UpdateFanpageTokenInput = z.infer<typeof updateFanpageTokenSchema>;
+export type TestFanpageConnectionResponse = z.infer<typeof testFanpageConnectionResponseSchema>;
 export type Source = z.infer<typeof sourceSchema>;
 export type CreateSourceInput = z.infer<typeof createSourceSchema>;
 export type ImageAsset = z.infer<typeof imageAssetSchema>;
@@ -376,6 +548,11 @@ export type AgentWorkflowRunDetail = z.infer<typeof agentWorkflowRunDetailSchema
 export type AdminProfile = z.infer<typeof adminProfileSchema>;
 export type PublishedPost = z.infer<typeof publishedPostSchema>;
 export type PublishOptions = z.infer<typeof publishOptionsSchema>;
+export type AgentSearchResult = z.infer<typeof agentSearchResultSchema>;
+export type AgentSearchInput = z.infer<typeof agentSearchInputSchema>;
+export type AgentSearchResponse = z.infer<typeof agentSearchResponseSchema>;
+export type GenerateFromSearchInput = z.infer<typeof generateFromSearchInputSchema>;
+export type GenerateFromSearchResponse = z.infer<typeof generateFromSearchResponseSchema>;
 
 export type ApiError = {
   message: string;

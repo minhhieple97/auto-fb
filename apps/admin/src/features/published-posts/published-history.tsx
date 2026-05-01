@@ -13,6 +13,7 @@ export function PublishedHistory({ posts }: PublishedHistoryProps) {
           <thead className="border-b border-line text-slate-600">
             <tr>
               <th className="py-2">Status</th>
+              <th>Fanpage</th>
               <th>Facebook post</th>
               <th>Draft</th>
               <th>Error</th>
@@ -22,6 +23,7 @@ export function PublishedHistory({ posts }: PublishedHistoryProps) {
             {posts.map((post) => (
               <tr className="border-b border-line" key={post.id}>
                 <td className="py-2">{post.status}</td>
+                <td>{post.fanpage ? `${post.fanpage.name} (${post.fanpage.environment})` : post.facebookPageId}</td>
                 <td>{post.facebookPostId ?? "-"}</td>
                 <td>{post.postDraftId}</td>
                 <td>{post.errorMessage ?? "-"}</td>

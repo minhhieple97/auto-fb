@@ -8,11 +8,11 @@ import { SourcePanel } from "./source-panel.js";
 
 vi.mock("../../lib/api-client.js", () => ({
   api: {
-    createSource: vi.fn()
+    createFanpageSource: vi.fn()
   }
 }));
 
-const createSource = vi.mocked(api.createSource);
+const createFanpageSource = vi.mocked(api.createFanpageSource);
 
 function source(overrides: Partial<Source> = {}): Source {
   return {
@@ -29,11 +29,11 @@ function source(overrides: Partial<Source> = {}): Source {
 
 describe("SourcePanel", () => {
   beforeEach(() => {
-    createSource.mockReset();
+    createFanpageSource.mockReset();
   });
 
   it("blocks source creation until a campaign is selected", () => {
-    renderWithClient(<SourcePanel campaignId={undefined} sources={[]} />);
+    renderWithClient(<SourcePanel fanpageId={undefined} sources={[]} />);
 
     expect(screen.getByRole("combobox")).toBeDisabled();
     expect(screen.getByPlaceholderText("https://example.com/feed.xml")).toBeDisabled();
@@ -42,8 +42,8 @@ describe("SourcePanel", () => {
 
   it("creates whitelisted enabled sources for the selected campaign", async () => {
     const user = userEvent.setup();
-    createSource.mockResolvedValue(source({ type: "api", url: "https://example.com/data.json" }));
-    const { queryClient } = renderWithClient(<SourcePanel campaignId="campaign-1" sources={[]} />);
+    createFanpageSource.mockResolvedValue(source({ type: "api", url: "https://example.com/data.json" }));
+    const { queryClient } = renderWithClient(<SourcePanel fanpageId="fanpage-1" sources={[]} />);
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
     await user.selectOptions(screen.getByRole("combobox"), "api");
@@ -51,7 +51,7 @@ describe("SourcePanel", () => {
     await user.click(screen.getByRole("button", { name: /add source/i }));
 
     await waitFor(() =>
-      expect(createSource).toHaveBeenCalledWith("campaign-1", {
+      expect(createFanpageSource).toHaveBeenCalledWith("fanpage-1", {
         type: "api",
         url: "https://example.com/data.json",
         crawlPolicy: "whitelist_only",
@@ -63,17 +63,17 @@ describe("SourcePanel", () => {
 
   it("validates the source URL before creating a source", async () => {
     const user = userEvent.setup();
-    renderWithClient(<SourcePanel campaignId="campaign-1" sources={[]} />);
+    renderWithClient(<SourcePanel fanpageId="fanpage-1" sources={[]} />);
 
     await user.type(screen.getByPlaceholderText("https://example.com/feed.xml"), "not-a-url");
     await user.click(screen.getByRole("button", { name: /add source/i }));
 
     expect(await screen.findByText("Enter a valid source URL.")).toBeInTheDocument();
-    expect(createSource).not.toHaveBeenCalled();
+    expect(createFanpageSource).not.toHaveBeenCalled();
   });
 
   it("does not expose source creation controls without permission", () => {
-    renderWithClient(<SourcePanel canCreate={false} campaignId="campaign-1" sources={[source()]} />);
+    renderWithClient(<SourcePanel canCreate={false} fanpageId="fanpage-1" sources={[source()]} />);
 
     expect(screen.getByText("https://example.com/feed.xml")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add source/i })).not.toBeInTheDocument();

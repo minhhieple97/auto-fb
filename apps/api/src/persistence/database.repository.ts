@@ -8,13 +8,17 @@ import type {
   ApprovalStatus,
   Campaign,
   ContentItem,
+  CreateFanpageInput,
   CreateCampaignInput,
   CreateSourceInput,
   DraftStatus,
+  Fanpage,
+  FanpageScheduleConfig,
   ImageAsset,
   PostDraft,
   PublishedPost,
   Source,
+  UpdateFanpageInput,
   UpdateCampaignInput
 } from "@auto-fb/shared";
 
@@ -25,6 +29,14 @@ type Awaitable<T> = T | Promise<T>;
 export type CreateContentInput = Omit<ContentItem, "id" | "createdAt">;
 export type CreateImageAssetInput = Omit<ImageAsset, "id" | "createdAt">;
 export type CreateDraftInput = Omit<PostDraft, "id" | "createdAt" | "updatedAt">;
+export type CreateFanpageRecordInput = Omit<CreateFanpageInput, "pageAccessToken"> & {
+  encryptedPageAccessToken?: string;
+  pageAccessTokenMask?: string;
+};
+export type UpdateFanpageRecordInput = Omit<UpdateFanpageInput, "pageAccessToken"> & {
+  encryptedPageAccessToken?: string | null;
+  pageAccessTokenMask?: string | null;
+};
 export type CreateAgentRunInput = Omit<AgentRun, "id" | "createdAt">;
 export type UpdateAgentRunInput = Partial<
   Pick<AgentRun, "inputJson" | "outputJson" | "status" | "errorMessage" | "startedAt" | "completedAt">
@@ -38,6 +50,20 @@ export type UpdateAgentWorkflowRunInput = Partial<{
 }>;
 export type CreatePublishedPostInput = Omit<PublishedPost, "id" | "createdAt">;
 
+export type FanpageTokenRecord = {
+  fanpage: Fanpage;
+  encryptedPageAccessToken?: string;
+};
+
+export type DraftFilters = {
+  status?: DraftStatus;
+  fanpageId?: string;
+};
+
+export type PublishedPostFilters = {
+  fanpageId?: string;
+};
+
 export interface DatabaseRepository {
   getAdminProfileForAuthUser(authUserId: string, email?: string): Awaitable<AdminProfile | undefined>;
 
@@ -45,6 +71,17 @@ export interface DatabaseRepository {
   listCampaigns(): Awaitable<Campaign[]>;
   getCampaign(id: string): Awaitable<Campaign>;
   updateCampaign(id: string, input: UpdateCampaignInput): Awaitable<Campaign>;
+
+  createFanpage(input: CreateFanpageRecordInput): Awaitable<Fanpage>;
+  listFanpages(): Awaitable<Fanpage[]>;
+  getFanpage(id: string): Awaitable<Fanpage>;
+  getFanpageByCampaignId(campaignId: string): Awaitable<Fanpage | undefined>;
+  getFanpageTokenRecord(id: string): Awaitable<FanpageTokenRecord>;
+  getFanpageTokenRecordByCampaignId(campaignId: string): Awaitable<FanpageTokenRecord | undefined>;
+  updateFanpage(id: string, input: UpdateFanpageRecordInput): Awaitable<Fanpage>;
+  updateFanpageSchedule(id: string, scheduleConfig: FanpageScheduleConfig): Awaitable<Fanpage>;
+  listSchedulableFanpages(): Awaitable<Fanpage[]>;
+  markFanpageScheduled(id: string, scheduledAt: string): Awaitable<Fanpage>;
 
   createSource(campaignId: string, input: CreateSourceInput): Awaitable<Source>;
   listSources(campaignId: string): Awaitable<Source[]>;
@@ -59,12 +96,12 @@ export interface DatabaseRepository {
   getImageAsset(id: string): Awaitable<ImageAsset>;
 
   createDraft(input: CreateDraftInput): Awaitable<PostDraft>;
-  listDrafts(status?: DraftStatus): Awaitable<PostDraft[]>;
+  listDrafts(filters?: DraftFilters | DraftStatus): Awaitable<PostDraft[]>;
   getDraft(id: string): Awaitable<PostDraft>;
   updateDraftStatus(id: string, status: DraftStatus, approvalStatus: ApprovalStatus): Awaitable<PostDraft>;
 
   createPublishedPost(input: CreatePublishedPostInput): Awaitable<PublishedPost>;
-  listPublishedPosts(): Awaitable<PublishedPost[]>;
+  listPublishedPosts(filters?: PublishedPostFilters): Awaitable<PublishedPost[]>;
 
   addAgentRun(input: CreateAgentRunInput): Awaitable<AgentRun>;
   updateAgentRun(id: string, input: UpdateAgentRunInput): Awaitable<AgentRun>;

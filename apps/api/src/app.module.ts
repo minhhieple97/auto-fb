@@ -10,6 +10,7 @@ import { LlmModule } from "./llm/llm.module.js";
 import { StorageModule } from "./storage/storage.module.js";
 import { WorkerModule } from "./worker/worker.module.js";
 import { AuthModule } from "./auth/auth.module.js";
+import { FanpagesModule } from "./fanpages/fanpages.module.js";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AuthModule } from "./auth/auth.module.js";
     AuthModule,
     LlmModule,
     StorageModule,
+    FanpagesModule,
     CampaignsModule,
     SourcesModule,
     AgentRunsModule,

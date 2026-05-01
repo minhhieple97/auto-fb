@@ -1,6 +1,7 @@
 export const llmDefaults = {
   anthropicVersion: "2023-06-01",
   maxKeyFactsInMockPost: 3,
+  maxMockSearchResults: 20,
   maxTokens: 700,
   temperature: 0.7
 } as const;
