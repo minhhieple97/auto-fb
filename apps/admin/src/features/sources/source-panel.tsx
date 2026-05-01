@@ -47,7 +47,7 @@ export function SourcePanel({ canCreate = true, fanpageId, sources }: SourcePane
       </div>
 
       {/* Source list */}
-      <ScrollArea className="flex-1 pr-4 -mr-4">
+      <ScrollArea className="flex-1 pr-4 -mr-4 [&>[data-radix-scroll-area-viewport]>div]:!block">
         <div className="space-y-2 pb-2">
           {sources.map((source) => (
             <SourceListItem key={source.id} source={source} />

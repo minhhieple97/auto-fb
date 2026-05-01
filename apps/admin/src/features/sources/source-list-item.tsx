@@ -18,7 +18,7 @@ export function SourceListItem({ source }: SourceListItemProps) {
         <div className="mt-0.5 rounded-md bg-slate-100 p-1.5 text-slate-500">
           <Icon size={14} />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-center gap-2">
             <span className="font-medium text-slate-900">{source.type}</span>
             <SourceStatusBadge enabled={source.enabled} />
