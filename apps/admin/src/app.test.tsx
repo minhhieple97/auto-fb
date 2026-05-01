@@ -95,17 +95,18 @@ describe("admin app auth", () => {
 
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
-    expect(screen.queryByText("Campaigns")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fanpages")).not.toBeInTheDocument();
   });
 
-  it("renders campaign, source, draft, timeline, and history surfaces after authentication", async () => {
+  it("renders fanpage, source, draft, timeline, and history surfaces after authentication", async () => {
     mockApiResponses();
     supabaseMock.getSession.mockResolvedValue({ data: { session }, error: null });
 
     renderWithClient(<App />);
 
-    expect(await screen.findByText("Campaigns")).toBeInTheDocument();
+    expect(await screen.findByText("Fanpages")).toBeInTheDocument();
     expect(screen.getByText("Sources")).toBeInTheDocument();
+    expect(screen.getByText("Search agent")).toBeInTheDocument();
     expect(screen.getByText("Approval inbox")).toBeInTheDocument();
     expect(screen.getByText("Agent timeline")).toBeInTheDocument();
     expect(screen.getByText("Published history")).toBeInTheDocument();
@@ -128,7 +129,7 @@ describe("admin app auth", () => {
 
     renderWithClient(<App />);
 
-    expect(await screen.findByText("Campaigns")).toBeInTheDocument();
+    expect(await screen.findByText("Fanpages")).toBeInTheDocument();
     expect(screen.getByText("viewer")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /create/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add source/i })).not.toBeInTheDocument();
@@ -150,7 +151,7 @@ describe("admin app auth", () => {
 
     expect(await screen.findByRole("heading", { name: "Access not granted" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
-    expect(screen.queryByText("Campaigns")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fanpages")).not.toBeInTheDocument();
   });
 
   it("navigates to agent workflow runs with React Router", async () => {
@@ -184,7 +185,7 @@ describe("admin app auth", () => {
         password: "correct-password"
       })
     );
-    expect(await screen.findByText("Campaigns")).toBeInTheDocument();
+    expect(await screen.findByText("Fanpages")).toBeInTheDocument();
   });
 
   it("validates login input before calling Supabase", async () => {

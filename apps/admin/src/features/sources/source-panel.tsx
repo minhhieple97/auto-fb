@@ -14,7 +14,7 @@ import { sourceTypeOptions } from "./source-options.js";
 
 type SourcePanelProps = {
   canCreate?: boolean;
-  campaignId: string | undefined;
+  fanpageId: string | undefined;
   sources: Source[];
 };
 
@@ -32,22 +32,22 @@ const sourceDefaultValues: CreateSourceInput = {
   enabled: sourceDefaults.enabled
 };
 
-export function SourcePanel({ canCreate = true, campaignId, sources }: SourcePanelProps) {
+export function SourcePanel({ canCreate = true, fanpageId, sources }: SourcePanelProps) {
   const queryClient = useQueryClient();
   const form = useForm<CreateSourceInput>({
     resolver: zodResolver(sourceFormSchema),
     defaultValues: sourceDefaultValues
   });
   const createSource = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: CreateSourceInput }) => api.createSource(id, input),
+    mutationFn: ({ id, input }: { id: string; input: CreateSourceInput }) => api.createFanpageSource(id, input),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: queryKeys.sourcesRoot })
   });
-  const disabled = !campaignId || !canCreate || createSource.isPending;
+  const disabled = !fanpageId || !canCreate || createSource.isPending;
 
   function submit(values: CreateSourceInput) {
-    if (!campaignId) return;
+    if (!fanpageId) return;
     createSource.mutate({
-      id: campaignId,
+      id: fanpageId,
       input: values
     });
     form.reset(sourceDefaultValues);

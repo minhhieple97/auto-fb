@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Campaign } from "@auto-fb/shared";
+import type { Fanpage } from "@auto-fb/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../lib/api-client.js";
 import { renderWithClient } from "../../test/render.js";
@@ -8,24 +8,37 @@ import { CampaignPanel } from "./campaign-panel.js";
 
 vi.mock("../../lib/api-client.js", () => ({
   api: {
-    campaigns: vi.fn(),
-    createCampaign: vi.fn()
+    createFanpage: vi.fn(),
+    fanpages: vi.fn(),
+    testFanpageConnection: vi.fn()
   }
 }));
 
-const campaigns = vi.mocked(api.campaigns);
-const createCampaign = vi.mocked(api.createCampaign);
+const fanpages = vi.mocked(api.fanpages);
+const createFanpage = vi.mocked(api.createFanpage);
+const testFanpageConnection = vi.mocked(api.testFanpageConnection);
 
-function campaign(overrides: Partial<Campaign> = {}): Campaign {
+function fanpage(overrides: Partial<Fanpage> = {}): Fanpage {
   return {
-    id: "camp_1",
+    id: "fanpage_1",
+    campaignId: "camp_1",
     name: "Launch",
+    facebookPageId: "page_1",
+    environment: "sandbox",
     topic: "AI operations",
     language: "vi",
     brandVoice: "helpful, concise, practical",
-    targetPageId: "page_1",
     llmProvider: "mock",
     llmModel: "mock-copywriter-v1",
+    scheduleConfig: {
+      enabled: false,
+      postsPerDay: 1,
+      intervalMinutes: 1440,
+      startTimeLocal: "09:00",
+      timezone: "Asia/Saigon"
+    },
+    hasPageAccessToken: true,
+    pageAccessTokenMask: "****1234",
     status: "ACTIVE",
     createdAt: "2026-05-01T00:00:00.000Z",
     updatedAt: "2026-05-01T00:00:00.000Z",
@@ -33,67 +46,75 @@ function campaign(overrides: Partial<Campaign> = {}): Campaign {
   };
 }
 
-describe("CampaignPanel", () => {
+describe("CampaignPanel fanpage management", () => {
   beforeEach(() => {
-    campaigns.mockReset().mockResolvedValue([campaign(), campaign({ id: "camp_2", name: "Evergreen", topic: "Operations" })]);
-    createCampaign.mockReset();
+    fanpages.mockReset().mockResolvedValue([
+      fanpage(),
+      fanpage({ id: "fanpage_2", campaignId: "camp_2", name: "Evergreen", environment: "production", topic: "Operations" })
+    ]);
+    createFanpage.mockReset();
+    testFanpageConnection.mockReset().mockResolvedValue({ ok: true, facebookPageId: "page_1", environment: "sandbox", pageName: "Launch" });
   });
 
-  it("lists campaigns and reports the selected campaign", async () => {
+  it("lists fanpages and reports the selected fanpage", async () => {
     const onSelect = vi.fn();
 
-    renderWithClient(<CampaignPanel selectedCampaignId="camp_1" onSelect={onSelect} onCreated={vi.fn()} />);
+    renderWithClient(<CampaignPanel selectedFanpageId="fanpage_1" onSelect={onSelect} onCreated={vi.fn()} />);
 
     await userEvent.click(await screen.findByTitle("Select Evergreen"));
 
     expect(screen.getByText("Launch")).toBeInTheDocument();
-    expect(screen.getByText("Operations")).toBeInTheDocument();
-    expect(onSelect).toHaveBeenCalledWith("camp_2");
+    expect(screen.getAllByText("Production").length).toBeGreaterThan(0);
+    expect(onSelect).toHaveBeenCalledWith("fanpage_2");
   });
 
-  it("creates a campaign with provider-specific model selection and refreshes the list", async () => {
+  it("creates a fanpage with token, environment, provider, and schedule controls", async () => {
     const user = userEvent.setup();
-    const created = campaign({ id: "camp_new", name: "New launch" });
+    const created = fanpage({ id: "fanpage_new", name: "New launch" });
     const onCreated = vi.fn();
-    createCampaign.mockResolvedValue(created);
-    const { queryClient } = renderWithClient(<CampaignPanel selectedCampaignId={undefined} onSelect={vi.fn()} onCreated={onCreated} />);
+    createFanpage.mockResolvedValue(created);
+    const { queryClient } = renderWithClient(<CampaignPanel selectedFanpageId={undefined} onSelect={vi.fn()} onCreated={onCreated} />);
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
-    await user.type(screen.getByPlaceholderText("Campaign name"), "New launch");
-    await user.type(screen.getByPlaceholderText("Topic"), "AI workflows");
+    await user.type(screen.getByPlaceholderText("Fanpage name"), "New launch");
     await user.type(screen.getByPlaceholderText("Facebook Page ID"), "page_new");
-    await user.selectOptions(screen.getAllByRole("combobox")[0]!, "mock");
+    await user.type(screen.getByPlaceholderText("Page Access Token"), "token_1234");
+    await user.type(screen.getByPlaceholderText("Topic"), "AI workflows");
+    await user.selectOptions(screen.getAllByRole("combobox")[1]!, "mock");
+    await user.click(screen.getByLabelText("Schedule draft generation"));
+    await user.clear(screen.getByLabelText("Posts per day"));
+    await user.type(screen.getByLabelText("Posts per day"), "2");
     await user.click(screen.getByRole("button", { name: /create/i }));
 
     await waitFor(() =>
-      expect(createCampaign.mock.calls[0]?.[0]).toEqual({
+      expect(createFanpage.mock.calls[0]?.[0]).toMatchObject({
         name: "New launch",
+        facebookPageId: "page_new",
+        environment: "sandbox",
         topic: "AI workflows",
-        language: "vi",
-        brandVoice: "helpful, concise, practical",
-        targetPageId: "page_new",
+        pageAccessToken: "token_1234",
         llmProvider: "mock",
-        llmModel: "mock-copywriter-v1"
+        llmModel: "mock-copywriter-v1",
+        scheduleConfig: expect.objectContaining({ enabled: true, postsPerDay: 2 })
       })
     );
-    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("camp_new"));
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["campaigns"] });
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("fanpage_new"));
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["fanpages"] });
   });
 
-  it("validates required campaign fields before creating a campaign", async () => {
+  it("tests a saved fanpage Graph API connection", async () => {
     const user = userEvent.setup();
-    renderWithClient(<CampaignPanel selectedCampaignId={undefined} onSelect={vi.fn()} onCreated={vi.fn()} />);
+    renderWithClient(<CampaignPanel selectedFanpageId="fanpage_1" onSelect={vi.fn()} onCreated={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: /create/i }));
+    const buttons = await screen.findAllByRole("button", { name: /test graph api connection/i });
+    await user.click(buttons[0]!);
 
-    expect(await screen.findByText("Campaign name must be at least 2 characters.")).toBeInTheDocument();
-    expect(screen.getByText("Topic must be at least 2 characters.")).toBeInTheDocument();
-    expect(screen.getByText("Facebook Page ID is required.")).toBeInTheDocument();
-    expect(createCampaign).not.toHaveBeenCalled();
+    await waitFor(() => expect(testFanpageConnection).toHaveBeenCalledWith("fanpage_1"));
+    expect(await screen.findByText("Connected to Launch")).toBeInTheDocument();
   });
 
-  it("does not expose campaign creation controls without permission", async () => {
-    renderWithClient(<CampaignPanel canCreate={false} selectedCampaignId={undefined} onSelect={vi.fn()} onCreated={vi.fn()} />);
+  it("does not expose fanpage creation controls without permission", async () => {
+    renderWithClient(<CampaignPanel canCreate={false} selectedFanpageId={undefined} onSelect={vi.fn()} onCreated={vi.fn()} />);
 
     expect(await screen.findByText("Launch")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /create/i })).not.toBeInTheDocument();

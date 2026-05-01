@@ -1,16 +1,27 @@
 import type {
   AgentRun,
   AgentRunFilters,
+  AgentSearchInput,
+  AgentSearchResponse,
   AgentWorkflowRunDetail,
   AgentWorkflowRunEvent,
   AgentWorkflowRunFilters,
   AdminProfile,
   Campaign,
   CreateCampaignInput,
+  CreateFanpageInput,
   CreateSourceInput,
+  Fanpage,
+  GenerateFromSearchInput,
+  GenerateFromSearchResponse,
   PostDraft,
+  PublishOptions,
   PublishedPost,
-  Source
+  Source,
+  TestFanpageConnectionResponse,
+  UpdateFanpageInput,
+  UpdateFanpageScheduleInput,
+  UpdateFanpageTokenInput
 } from "@auto-fb/shared";
 import { apiEndpoints, defaultApiBaseUrl, queryString } from "./api-endpoints.js";
 import { sseProtocol } from "./sse.constants.js";
@@ -133,10 +144,33 @@ export const api = {
     request<Campaign>(apiEndpoints.campaigns, { method: "POST", body: JSON.stringify(input) }),
   updateCampaign: (id: string, input: Partial<CreateCampaignInput>) =>
     request<Campaign>(apiEndpoints.campaign(id), { method: "PATCH", body: JSON.stringify(input) }),
+  fanpages: () => request<Fanpage[]>(apiEndpoints.fanpages),
+  createFanpage: (input: CreateFanpageInput) =>
+    request<Fanpage>(apiEndpoints.fanpages, { method: "POST", body: JSON.stringify(input) }),
+  updateFanpage: (id: string, input: UpdateFanpageInput) =>
+    request<Fanpage>(apiEndpoints.fanpage(id), { method: "PATCH", body: JSON.stringify(input) }),
+  updateFanpageSchedule: (id: string, input: UpdateFanpageScheduleInput) =>
+    request<Fanpage>(apiEndpoints.fanpageSchedule(id), { method: "PATCH", body: JSON.stringify(input) }),
+  updateFanpageToken: (id: string, input: UpdateFanpageTokenInput) =>
+    request<Fanpage>(apiEndpoints.fanpageToken(id), { method: "PATCH", body: JSON.stringify(input) }),
+  testFanpageConnection: (id: string) =>
+    request<TestFanpageConnectionResponse>(apiEndpoints.fanpageTestConnection(id), { method: "POST", body: JSON.stringify({}) }),
   sources: (campaignId: string) => request<Source[]>(apiEndpoints.campaignSources(campaignId)),
   createSource: (campaignId: string, input: CreateSourceInput) =>
     request<Source>(apiEndpoints.campaignSources(campaignId), { method: "POST", body: JSON.stringify(input) }),
+  fanpageSources: (fanpageId: string) => request<Source[]>(apiEndpoints.fanpageSources(fanpageId)),
+  createFanpageSource: (fanpageId: string, input: CreateSourceInput) =>
+    request<Source>(apiEndpoints.fanpageSources(fanpageId), { method: "POST", body: JSON.stringify(input) }),
+  searchAgent: (campaignId: string, input: AgentSearchInput) =>
+    request<AgentSearchResponse>(apiEndpoints.campaignAgentSearch(campaignId), { method: "POST", body: JSON.stringify(input) }),
+  generateFromSearch: (campaignId: string, input: GenerateFromSearchInput) =>
+    request<GenerateFromSearchResponse>(apiEndpoints.campaignAgentSearchGenerate(campaignId), {
+      method: "POST",
+      body: JSON.stringify(input)
+    }),
   runWorkflow: (campaignId: string) => request<AgentWorkflowRunDetail>(apiEndpoints.campaignRuns(campaignId), { method: "POST" }),
+  runFanpageWorkflow: (fanpageId: string) =>
+    request<AgentWorkflowRunDetail>(apiEndpoints.fanpageRuns(fanpageId), { method: "POST", body: JSON.stringify({}) }),
   agentRuns: (filters: AgentRunFilters | string = {}) => {
     const normalized = typeof filters === "string" ? { campaignId: filters } : filters;
     return request<AgentRun[]>(`${apiEndpoints.agentRuns}${queryString(normalized)}`);
@@ -144,8 +178,9 @@ export const api = {
   agentWorkflowRuns: (filters: AgentWorkflowRunFilters = {}) =>
     request<AgentWorkflowRunDetail[]>(`${apiEndpoints.agentWorkflowRuns}${queryString(filters)}`),
   streamAgentWorkflowRuns,
-  drafts: () => request<PostDraft[]>(apiEndpoints.drafts()),
-  approveDraft: (id: string) => request<PublishedPost>(apiEndpoints.draftApprove(id), { method: "POST", body: JSON.stringify({}) }),
+  drafts: (fanpageId?: string) => request<PostDraft[]>(apiEndpoints.drafts(undefined, fanpageId)),
+  approveDraft: (id: string, options: PublishOptions = {}) =>
+    request<PublishedPost>(apiEndpoints.draftApprove(id), { method: "POST", body: JSON.stringify(options) }),
   rejectDraft: (id: string) => request<PostDraft>(apiEndpoints.draftReject(id), { method: "POST", body: JSON.stringify({}) }),
-  publishedPosts: () => request<PublishedPost[]>(apiEndpoints.publishedPosts)
+  publishedPosts: (fanpageId?: string) => request<PublishedPost[]>(apiEndpoints.publishedPosts(fanpageId))
 };
