@@ -3,9 +3,11 @@ import { AdminHeader } from "./admin-header.js";
 
 export function AdminLayout() {
   return (
-    <main className="min-h-screen bg-canvas">
+    <main className="flex h-screen flex-col overflow-hidden bg-slate-50">
       <AdminHeader />
-      <Outlet />
+      <div className="flex-1 overflow-hidden relative">
+        <Outlet />
+      </div>
     </main>
   );
 }

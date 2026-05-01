@@ -14,6 +14,8 @@ import { PublishedHistory } from "../published-posts/published-history.js";
 import { SourcePanel } from "../sources/source-panel.js";
 import { CampaignRunPanel } from "../workflow/campaign-run-panel.js";
 import { SearchAgentPanel } from "../workflow/search-agent-panel.js";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs.js";
+import { Badge } from "../../components/ui/badge.js";
 import { api } from "../../lib/api-client.js";
 
 export function DashboardPage() {
@@ -61,24 +63,90 @@ export function DashboardPage() {
   const canReviewDrafts = hasPermission(adminPermissions.reviewDrafts);
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-4 px-6 py-6 lg:grid-cols-[360px_1fr]">
-      <aside className="space-y-4">
-        <CampaignPanel
-          canCreate={canManageCampaigns}
-          selectedFanpageId={selectedFanpageId}
-          onSelect={selectFanpage}
-          onCreated={selectFanpage}
-        />
-        <SourcePanel canCreate={canManageSources} fanpageId={selectedFanpageId} sources={sources.data ?? []} />
+    <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-slate-50">
+      {/* Fixed Left Sidebar */}
+      <aside className="w-80 flex-shrink-0 border-r border-slate-200 bg-white shadow-sm z-10 flex flex-col h-full">
+        <div className="flex-1 flex flex-col p-4 overflow-hidden h-full">
+          <div className="flex-1 min-h-0">
+            <CampaignPanel
+              canCreate={canManageCampaigns}
+              selectedFanpageId={selectedFanpageId}
+              onSelect={selectFanpage}
+              onCreated={selectFanpage}
+            />
+          </div>
+          <div className="h-px bg-slate-200 -mx-4 my-4 flex-shrink-0" />
+          <div className="flex-1 min-h-0">
+            <SourcePanel canCreate={canManageSources} fanpageId={selectedFanpageId} sources={sources.data ?? []} />
+          </div>
+        </div>
       </aside>
 
-      <section className="space-y-4">
-        <CampaignRunPanel canRun={canRunWorkflow} fanpageId={selectedFanpageId} fanpageName={selectedFanpage?.name} />
-        <SearchAgentPanel canRun={canRunWorkflow} campaignId={selectedCampaignId} onGenerated={refreshDashboard} />
-        <DraftInbox canReview={canReviewDrafts} drafts={drafts.data ?? []} onChanged={refreshDashboard} />
-        <AgentTimeline runs={agentRuns.data ?? []} onOpenDetails={() => navigate(adminRoutes.agentRuns)} />
-        <PublishedHistory posts={publishedPosts.data ?? []} />
-      </section>
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto p-6 lg:p-8">
+        <div className="mx-auto max-w-5xl space-y-8">
+          {/* Top Actions Panel */}
+          <section className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <CampaignRunPanel canRun={canRunWorkflow} fanpageId={selectedFanpageId} fanpageName={selectedFanpage?.name} />
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <SearchAgentPanel canRun={canRunWorkflow} campaignId={selectedCampaignId} onGenerated={refreshDashboard} />
+            </div>
+          </section>
+
+          {/* Tabbed Interface for Detailed Information */}
+          <section>
+            <Tabs defaultValue="inbox" className="w-full">
+              <div className="mb-4 border-b border-slate-200">
+                <TabsList className="h-10 bg-transparent p-0 w-full justify-start rounded-none">
+                  <TabsTrigger 
+                    value="inbox" 
+                    className="flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-2 font-medium text-slate-500 hover:text-slate-900 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+                  >
+                    Draft Inbox
+                    {drafts.data?.length ? (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] font-semibold bg-amber-100 text-amber-800 hover:bg-amber-100">
+                        {drafts.data.length}
+                      </Badge>
+                    ) : null}
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="timeline" 
+                    className="rounded-none border-b-2 border-transparent px-4 py-2 font-medium text-slate-500 hover:text-slate-900 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+                  >
+                    Agent Timeline
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="history" 
+                    className="rounded-none border-b-2 border-transparent px-4 py-2 font-medium text-slate-500 hover:text-slate-900 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
+                  >
+                    Published History
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <div className="mt-4">
+                <TabsContent value="inbox" className="mt-0 outline-none">
+                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <DraftInbox canReview={canReviewDrafts} drafts={drafts.data ?? []} onChanged={refreshDashboard} />
+                  </div>
+                </TabsContent>
+                <TabsContent value="timeline" className="mt-0 outline-none">
+                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <AgentTimeline runs={agentRuns.data ?? []} onOpenDetails={() => navigate(adminRoutes.agentRuns)} />
+                  </div>
+                </TabsContent>
+                <TabsContent value="history" className="mt-0 outline-none">
+                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden p-2">
+                    <PublishedHistory posts={publishedPosts.data ?? []} />
+                  </div>
+                </TabsContent>
+              </div>
+            </Tabs>
+          </section>
+        </div>
+      </main>
     </div>
   );
 }
