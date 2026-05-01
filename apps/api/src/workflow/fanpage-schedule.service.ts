@@ -27,9 +27,9 @@ export class FanpageScheduleService implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | undefined;
 
   constructor(
-    config: ConfigService,
+    @Inject(ConfigService) config: ConfigService,
     @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository,
-    private readonly queue: AgentWorkflowQueueService
+    @Inject(AgentWorkflowQueueService) private readonly queue: AgentWorkflowQueueService
   ) {
     const redisUrl = config.get<string>(envKeys.redisUrl);
     if (redisUrl) {

@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type {
   AgentRun,
@@ -96,7 +96,7 @@ export class SupabaseDatabase implements DatabaseRepository {
   private readonly apiKey: string;
   private readonly schema: string;
 
-  constructor(config: ConfigService) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     const supabaseUrl = config.get<string>(envKeys.supabaseUrl)?.replace(/\/$/, "");
     const apiKey =
       config.get<string>(envKeys.supabaseSecretKey) ??

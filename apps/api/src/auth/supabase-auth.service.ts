@@ -14,7 +14,7 @@ export class SupabaseAuthService {
   private readonly apiKey: string | undefined;
 
   constructor(
-    config: ConfigService,
+    @Inject(ConfigService) config: ConfigService,
     @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository
   ) {
     this.supabaseUrl = config.get<string>(envKeys.supabaseUrl)?.replace(/\/$/, "");

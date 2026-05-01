@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { envKeys, nodeEnvironments } from "../common/app.constants.js";
@@ -12,7 +12,7 @@ const LOCAL_DEV_SECRET = "auto-fb-local-page-token-key";
 export class PageTokenCryptoService {
   private readonly key: Buffer;
 
-  constructor(config: ConfigService) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     const secret = config.get<string>(envKeys.facebookPageTokenEncryptionKey);
     const nodeEnv = config.get<string>(envKeys.nodeEnv);
     if (!secret && nodeEnv === nodeEnvironments.production) {
