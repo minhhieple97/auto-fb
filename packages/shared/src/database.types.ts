@@ -183,6 +183,60 @@ export type Database = {
         }
         Relationships: []
       }
+      content_items: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          hash: string
+          id: string
+          image_urls: Json
+          raw_text: string
+          source_id: string
+          source_url: string
+          summary: string
+          title: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at: string
+          hash: string
+          id?: string
+          image_urls?: Json
+          raw_text: string
+          source_id: string
+          source_url: string
+          summary: string
+          title: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          hash?: string
+          id?: string
+          image_urls?: Json
+          raw_text?: string
+          source_id?: string
+          source_url?: string
+          summary?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_items_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       facebook_pages: {
         Row: {
           brand_voice: string
@@ -259,60 +313,6 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: true
             referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      content_items: {
-        Row: {
-          campaign_id: string
-          created_at: string
-          hash: string
-          id: string
-          image_urls: Json
-          raw_text: string
-          source_id: string
-          source_url: string
-          summary: string
-          title: string
-        }
-        Insert: {
-          campaign_id: string
-          created_at: string
-          hash: string
-          id?: string
-          image_urls?: Json
-          raw_text: string
-          source_id: string
-          source_url: string
-          summary: string
-          title: string
-        }
-        Update: {
-          campaign_id?: string
-          created_at?: string
-          hash?: string
-          id?: string
-          image_urls?: Json
-          raw_text?: string
-          source_id?: string
-          source_url?: string
-          summary?: string
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "content_items_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "content_items_source_id_fkey"
-            columns: ["source_id"]
-            isOneToOne: false
-            referencedRelation: "sources"
             referencedColumns: ["id"]
           },
         ]
@@ -470,7 +470,6 @@ export type Database = {
           created_at: string
           enabled: boolean
           id: string
-          metadata: Json | null
           type: string
           url: string
         }
@@ -480,7 +479,6 @@ export type Database = {
           created_at: string
           enabled?: boolean
           id?: string
-          metadata?: Json | null
           type: string
           url: string
         }
@@ -490,7 +488,6 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
-          metadata?: Json | null
           type?: string
           url?: string
         }
