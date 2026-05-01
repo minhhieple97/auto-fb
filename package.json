@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
+    "db:push": "supabase db push --linked",
+    "db:types": "supabase gen types typescript --project-id ${SUPABASE_PROJECT_REF:-oargectikpgjmzmotdmp} --schema public > packages/shared/src/database.types.ts",
     "dev": "pnpm --filter @auto-fb/shared build && pnpm --parallel --filter @auto-fb/api --filter @auto-fb/admin dev",
     "dev:api": "pnpm --filter @auto-fb/shared build && pnpm --filter @auto-fb/api dev",
     "dev:admin": "pnpm --filter @auto-fb/shared build && pnpm --filter @auto-fb/admin dev",
