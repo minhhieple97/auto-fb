@@ -1,0 +1,19 @@
+{
+  "name": "auto-fb",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @auto-fb/shared build && pnpm --parallel --filter @auto-fb/api --filter @auto-fb/admin dev",
+    "dev:api": "pnpm --filter @auto-fb/shared build && pnpm --filter @auto-fb/api dev",
+    "dev:admin": "pnpm --filter @auto-fb/shared build && pnpm --filter @auto-fb/admin dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.14.0"
+}
