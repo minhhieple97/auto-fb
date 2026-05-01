@@ -7,17 +7,21 @@ import { CollectorAgent } from "./collector.agent.js";
 import { CopywritingAgent } from "./copywriting.agent.js";
 import { ImageAgent } from "./image.agent.js";
 import { QaComplianceAgent } from "./qa-compliance.agent.js";
+import { SearchAgentController } from "./search-agent.controller.js";
+import { SearchContentAgent } from "./search-content.agent.js";
 import { SourceDiscoveryAgent } from "./source-discovery.agent.js";
 import { UnderstandingAgent } from "./understanding.agent.js";
 
 @Module({
   imports: [LlmModule, StorageModule],
+  controllers: [SearchAgentController],
   providers: [
     CollectorService,
     SourceDiscoveryAgent,
     CollectorAgent,
     UnderstandingAgent,
     CopywritingAgent,
+    SearchContentAgent,
     ImageAgent,
     QaComplianceAgent,
     ApprovalGateAgent
@@ -27,6 +31,7 @@ import { UnderstandingAgent } from "./understanding.agent.js";
     CollectorAgent,
     UnderstandingAgent,
     CopywritingAgent,
+    SearchContentAgent,
     ImageAgent,
     QaComplianceAgent,
     ApprovalGateAgent

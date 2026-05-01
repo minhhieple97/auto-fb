@@ -10,6 +10,8 @@ import type {
   CreateCampaignInput,
   CreateSourceInput,
   DraftStatus,
+  Fanpage,
+  FanpageScheduleConfig,
   ImageAsset,
   PostDraft,
   PublishedPost,
@@ -23,11 +25,16 @@ import type {
   CreateAgentWorkflowRunInput,
   CreateContentInput,
   CreateDraftInput,
+  CreateFanpageRecordInput,
   CreateImageAssetInput,
   CreatePublishedPostInput,
   DatabaseRepository,
+  DraftFilters,
+  FanpageTokenRecord,
   AgentRunFilters,
   AgentWorkflowRunFilters,
+  PublishedPostFilters,
+  UpdateFanpageRecordInput,
   UpdateAgentRunInput,
   UpdateAgentWorkflowRunInput
 } from "../src/persistence/database.repository.js";
@@ -35,6 +42,8 @@ import type {
 export class FakeDatabase implements DatabaseRepository {
   private adminProfiles = new Map<string, AdminProfile>();
   private campaigns = new Map<string, Campaign>();
+  private fanpages = new Map<string, Fanpage>();
+  private fanpageTokens = new Map<string, string>();
   private sources = new Map<string, Source>();
   private contentItems = new Map<string, ContentItem>();
   private imageAssets = new Map<string, ImageAsset>();
@@ -99,6 +108,159 @@ export class FakeDatabase implements DatabaseRepository {
       updatedAt: nowIso()
     };
     this.campaigns.set(id, updated);
+    const fanpage = [...this.fanpages.values()].find((item) => item.campaignId === id);
+    if (fanpage) {
+      this.fanpages.set(fanpage.id, {
+        ...fanpage,
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.topic !== undefined ? { topic: input.topic } : {}),
+        ...(input.language !== undefined ? { language: input.language } : {}),
+        ...(input.brandVoice !== undefined ? { brandVoice: input.brandVoice } : {}),
+        ...(input.targetPageId !== undefined ? { facebookPageId: input.targetPageId } : {}),
+        ...(input.llmProvider !== undefined ? { llmProvider: input.llmProvider } : {}),
+        ...(input.llmModel !== undefined ? { llmModel: input.llmModel } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        updatedAt: updated.updatedAt
+      });
+    }
+    return this.clone(updated);
+  }
+
+  createFanpage(input: CreateFanpageRecordInput): Fanpage {
+    const campaign = this.createCampaign({
+      name: input.name,
+      topic: input.topic,
+      language: input.language,
+      brandVoice: input.brandVoice,
+      targetPageId: input.facebookPageId,
+      llmProvider: input.llmProvider,
+      llmModel: input.llmModel
+    } satisfies CreateCampaignInput);
+    const timestamp = campaign.createdAt;
+    const fanpage: Fanpage = {
+      id: randomUUID(),
+      campaignId: campaign.id,
+      name: input.name,
+      facebookPageId: input.facebookPageId,
+      environment: input.environment,
+      topic: input.topic,
+      language: input.language,
+      brandVoice: input.brandVoice,
+      llmProvider: input.llmProvider,
+      llmModel: input.llmModel,
+      scheduleConfig: input.scheduleConfig,
+      hasPageAccessToken: Boolean(input.encryptedPageAccessToken),
+      ...(input.pageAccessTokenMask ? { pageAccessTokenMask: input.pageAccessTokenMask } : {}),
+      status: campaign.status,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    this.fanpages.set(fanpage.id, fanpage);
+    if (input.encryptedPageAccessToken) {
+      this.fanpageTokens.set(fanpage.id, input.encryptedPageAccessToken);
+    }
+    return this.clone(fanpage);
+  }
+
+  listFanpages(): Fanpage[] {
+    return this.sortByCreatedAt([...this.fanpages.values()]);
+  }
+
+  getFanpage(id: string): Fanpage {
+    const fanpage = this.fanpages.get(id);
+    if (!fanpage) throw new NotFoundException(`Fanpage ${id} not found`);
+    return this.clone(fanpage);
+  }
+
+  getFanpageByCampaignId(campaignId: string): Fanpage | undefined {
+    const fanpage = [...this.fanpages.values()].find((item) => item.campaignId === campaignId);
+    return fanpage ? this.clone(fanpage) : undefined;
+  }
+
+  getFanpageTokenRecord(id: string): FanpageTokenRecord {
+    const fanpage = this.getFanpage(id);
+    const encryptedPageAccessToken = this.fanpageTokens.get(id);
+    return this.clone({
+      fanpage,
+      ...(encryptedPageAccessToken ? { encryptedPageAccessToken } : {})
+    });
+  }
+
+  getFanpageTokenRecordByCampaignId(campaignId: string): FanpageTokenRecord | undefined {
+    const fanpage = this.getFanpageByCampaignId(campaignId);
+    if (!fanpage) return undefined;
+    const encryptedPageAccessToken = this.fanpageTokens.get(fanpage.id);
+    return this.clone({
+      fanpage,
+      ...(encryptedPageAccessToken ? { encryptedPageAccessToken } : {})
+    });
+  }
+
+  updateFanpage(id: string, input: UpdateFanpageRecordInput): Fanpage {
+    const existing = this.getFanpage(id);
+    const updated: Fanpage = {
+      ...existing,
+      name: input.name ?? existing.name,
+      facebookPageId: input.facebookPageId ?? existing.facebookPageId,
+      environment: input.environment ?? existing.environment,
+      topic: input.topic ?? existing.topic,
+      language: input.language ?? existing.language,
+      brandVoice: input.brandVoice ?? existing.brandVoice,
+      llmProvider: input.llmProvider ?? existing.llmProvider,
+      llmModel: input.llmModel ?? existing.llmModel,
+      scheduleConfig: input.scheduleConfig ?? existing.scheduleConfig,
+      status: (input.status ?? existing.status) as CampaignStatus,
+      hasPageAccessToken:
+        input.encryptedPageAccessToken !== undefined ? input.encryptedPageAccessToken !== null : existing.hasPageAccessToken,
+      ...(input.pageAccessTokenMask !== undefined
+        ? input.pageAccessTokenMask
+          ? { pageAccessTokenMask: input.pageAccessTokenMask }
+          : {}
+        : existing.pageAccessTokenMask
+          ? { pageAccessTokenMask: existing.pageAccessTokenMask }
+          : {}),
+      updatedAt: nowIso()
+    };
+    if (input.encryptedPageAccessToken !== undefined) {
+      if (input.encryptedPageAccessToken === null) {
+        this.fanpageTokens.delete(id);
+      } else {
+        this.fanpageTokens.set(id, input.encryptedPageAccessToken);
+      }
+    }
+    this.fanpages.set(id, updated);
+    this.updateCampaign(existing.campaignId, {
+      name: updated.name,
+      topic: updated.topic,
+      language: updated.language,
+      brandVoice: updated.brandVoice,
+      targetPageId: updated.facebookPageId,
+      llmProvider: updated.llmProvider,
+      llmModel: updated.llmModel,
+      status: updated.status
+    });
+    this.fanpages.set(id, updated);
+    return this.clone(updated);
+  }
+
+  updateFanpageSchedule(id: string, scheduleConfig: FanpageScheduleConfig): Fanpage {
+    return this.updateFanpage(id, { scheduleConfig });
+  }
+
+  listSchedulableFanpages(): Fanpage[] {
+    return this.sortByCreatedAt(
+      [...this.fanpages.values()].filter((fanpage) => fanpage.status === "ACTIVE" && fanpage.scheduleConfig.enabled)
+    );
+  }
+
+  markFanpageScheduled(id: string, scheduledAt: string): Fanpage {
+    const existing = this.getFanpage(id);
+    const updated: Fanpage = {
+      ...existing,
+      lastScheduledAt: scheduledAt,
+      updatedAt: nowIso()
+    };
+    this.fanpages.set(id, updated);
     return this.clone(updated);
   }
 
@@ -180,8 +342,14 @@ export class FakeDatabase implements DatabaseRepository {
     return this.hydrateDraft(draft);
   }
 
-  listDrafts(status?: DraftStatus): PostDraft[] {
-    const drafts = [...this.drafts.values()].filter((draft) => !status || draft.status === status);
+  listDrafts(filters?: DraftFilters | DraftStatus): PostDraft[] {
+    const normalized = typeof filters === "string" ? { status: filters } : filters;
+    const fanpage = normalized?.fanpageId ? this.getFanpage(normalized.fanpageId) : undefined;
+    const drafts = [...this.drafts.values()].filter(
+      (draft) =>
+        (!normalized?.status || draft.status === normalized.status) &&
+        (!fanpage || draft.campaignId === fanpage.campaignId)
+    );
     return this.sortByCreatedAt(drafts).map((draft) => this.hydrateDraft(draft));
   }
 
@@ -206,17 +374,22 @@ export class FakeDatabase implements DatabaseRepository {
   }
 
   createPublishedPost(input: CreatePublishedPostInput): PublishedPost {
+    const draft = this.drafts.get(input.postDraftId);
+    const fanpage = draft ? this.getFanpageByCampaignId(draft.campaignId) : undefined;
     const post: PublishedPost = {
       id: randomUUID(),
       ...input,
+      ...(fanpage ? { fanpage: toFanpageSummary(fanpage) } : {}),
       createdAt: nowIso()
     };
     this.publishedPosts.set(post.id, post);
     return this.clone(post);
   }
 
-  listPublishedPosts(): PublishedPost[] {
-    return this.sortByCreatedAt([...this.publishedPosts.values()]);
+  listPublishedPosts(filters: PublishedPostFilters = {}): PublishedPost[] {
+    return this.sortByCreatedAt(
+      [...this.publishedPosts.values()].filter((post) => !filters.fanpageId || post.fanpage?.id === filters.fanpageId)
+    );
   }
 
   addAgentRun(input: CreateAgentRunInput): AgentRun {
@@ -303,6 +476,8 @@ export class FakeDatabase implements DatabaseRepository {
 
   clear(): void {
     this.campaigns.clear();
+    this.fanpages.clear();
+    this.fanpageTokens.clear();
     this.sources.clear();
     this.contentItems.clear();
     this.imageAssets.clear();
@@ -316,10 +491,12 @@ export class FakeDatabase implements DatabaseRepository {
   private hydrateDraft(draft: PostDraft): PostDraft {
     const contentItem = this.contentItems.get(draft.contentItemId);
     const imageAsset = draft.imageAssetId ? this.imageAssets.get(draft.imageAssetId) : undefined;
+    const fanpage = this.getFanpageByCampaignId(draft.campaignId);
     return this.clone({
       ...draft,
       ...(contentItem ? { contentItem } : {}),
-      ...(imageAsset ? { imageAsset } : {})
+      ...(imageAsset ? { imageAsset } : {}),
+      ...(fanpage ? { fanpage: toFanpageSummary(fanpage) } : {})
     });
   }
 
@@ -334,4 +511,15 @@ export class FakeDatabase implements DatabaseRepository {
   private clone<T>(value: T): T {
     return structuredClone(value);
   }
+}
+
+function toFanpageSummary(fanpage: Fanpage) {
+  return {
+    id: fanpage.id,
+    campaignId: fanpage.campaignId,
+    name: fanpage.name,
+    facebookPageId: fanpage.facebookPageId,
+    environment: fanpage.environment,
+    status: fanpage.status
+  };
 }

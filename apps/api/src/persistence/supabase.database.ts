@@ -19,6 +19,10 @@ import type {
   CreateSourceInput,
   Database,
   DraftStatus,
+  Fanpage,
+  FanpageEnvironment,
+  FanpageScheduleConfig,
+  FanpageSummary,
   ImageAsset,
   Json,
   LlmProvider,
@@ -41,10 +45,15 @@ import type {
   CreateAgentWorkflowRunInput,
   CreateContentInput,
   CreateDraftInput,
+  CreateFanpageRecordInput,
   CreateImageAssetInput,
   CreatePublishedPostInput,
   DatabaseRepository,
+  DraftFilters,
+  FanpageTokenRecord,
+  PublishedPostFilters,
   UpdateAgentRunInput,
+  UpdateFanpageRecordInput,
   UpdateAgentWorkflowRunInput
 } from "./database.repository.js";
 
@@ -54,6 +63,7 @@ type SupabaseRequestOptions = Omit<RequestInit, "headers"> & {
 
 type SupabaseTable = keyof Database["public"]["Tables"];
 type CampaignRow = Tables<"campaigns">;
+type FanpageRow = Tables<"facebook_pages">;
 type SourceRow = Tables<"sources">;
 type ContentItemRow = Tables<"content_items">;
 type ImageAssetRow = Tables<"image_assets">;
@@ -159,7 +169,8 @@ export class SupabaseDatabase implements DatabaseRepository {
   }
 
   async updateCampaign(id: string, input: UpdateCampaignInput): Promise<Campaign> {
-    const patch: TablesUpdate<"campaigns"> = { updated_at: nowIso() };
+    const timestamp = nowIso();
+    const patch: TablesUpdate<"campaigns"> = { updated_at: timestamp };
     if (input.name !== undefined) patch.name = input.name;
     if (input.topic !== undefined) patch.topic = input.topic;
     if (input.language !== undefined) patch.language = input.language;
@@ -170,7 +181,143 @@ export class SupabaseDatabase implements DatabaseRepository {
     if (input.status !== undefined) patch.status = input.status;
 
     const row = await this.updateOne("campaigns", { id: this.eq(id) }, patch, `Campaign ${id} not found`);
+    const fanpage = await this.findFanpageByCampaignId(id);
+    if (fanpage) {
+      const fanpagePatch: TablesUpdate<"facebook_pages"> = { updated_at: timestamp };
+      if (input.name !== undefined) fanpagePatch.name = input.name;
+      if (input.topic !== undefined) fanpagePatch.topic = input.topic;
+      if (input.language !== undefined) fanpagePatch.language = input.language;
+      if (input.brandVoice !== undefined) fanpagePatch.brand_voice = input.brandVoice;
+      if (input.targetPageId !== undefined) fanpagePatch.facebook_page_id = input.targetPageId;
+      if (input.llmProvider !== undefined) fanpagePatch.llm_provider = input.llmProvider;
+      if (input.llmModel !== undefined) fanpagePatch.llm_model = input.llmModel;
+      if (input.status !== undefined) fanpagePatch.status = input.status;
+      await this.updateOne(
+        "facebook_pages",
+        { id: this.eq(fanpage.id) },
+        fanpagePatch,
+        `Fanpage ${fanpage.id} not found`
+      );
+    }
     return toCampaign(row);
+  }
+
+  async createFanpage(input: CreateFanpageRecordInput): Promise<Fanpage> {
+    const campaign = await this.createCampaign({
+      name: input.name,
+      topic: input.topic,
+      language: input.language,
+      brandVoice: input.brandVoice,
+      targetPageId: input.facebookPageId,
+      llmProvider: input.llmProvider,
+      llmModel: input.llmModel
+    });
+    const timestamp = nowIso();
+    const row = await this.insertOne("facebook_pages", {
+      id: randomUUID(),
+      campaign_id: campaign.id,
+      name: input.name,
+      facebook_page_id: input.facebookPageId,
+      environment: input.environment,
+      topic: input.topic,
+      language: input.language,
+      brand_voice: input.brandVoice,
+      llm_provider: input.llmProvider,
+      llm_model: input.llmModel,
+      ...scheduleColumns(input.scheduleConfig),
+      encrypted_page_access_token: input.encryptedPageAccessToken ?? null,
+      page_access_token_mask: input.pageAccessTokenMask ?? null,
+      status: campaignStatuses.active,
+      created_at: timestamp,
+      updated_at: timestamp
+    });
+    return toFanpage(row);
+  }
+
+  async listFanpages(): Promise<Fanpage[]> {
+    const rows = await this.selectMany("facebook_pages", { order: "created_at.desc" });
+    return rows.map(toFanpage);
+  }
+
+  async getFanpage(id: string): Promise<Fanpage> {
+    const row = await this.selectOne("facebook_pages", { id: this.eq(id) }, `Fanpage ${id} not found`);
+    return toFanpage(row);
+  }
+
+  async getFanpageByCampaignId(campaignId: string): Promise<Fanpage | undefined> {
+    const row = await this.findFanpageByCampaignId(campaignId);
+    return row ? toFanpage(row) : undefined;
+  }
+
+  async getFanpageTokenRecord(id: string): Promise<FanpageTokenRecord> {
+    const row = await this.selectOne("facebook_pages", { id: this.eq(id) }, `Fanpage ${id} not found`);
+    return toFanpageTokenRecord(row);
+  }
+
+  async getFanpageTokenRecordByCampaignId(campaignId: string): Promise<FanpageTokenRecord | undefined> {
+    const row = await this.findFanpageByCampaignId(campaignId);
+    return row ? toFanpageTokenRecord(row) : undefined;
+  }
+
+  async updateFanpage(id: string, input: UpdateFanpageRecordInput): Promise<Fanpage> {
+    const existing = await this.getFanpage(id);
+    const timestamp = nowIso();
+    const patch: TablesUpdate<"facebook_pages"> = { updated_at: timestamp };
+    if (input.name !== undefined) patch.name = input.name;
+    if (input.facebookPageId !== undefined) patch.facebook_page_id = input.facebookPageId;
+    if (input.environment !== undefined) patch.environment = input.environment;
+    if (input.topic !== undefined) patch.topic = input.topic;
+    if (input.language !== undefined) patch.language = input.language;
+    if (input.brandVoice !== undefined) patch.brand_voice = input.brandVoice;
+    if (input.llmProvider !== undefined) patch.llm_provider = input.llmProvider;
+    if (input.llmModel !== undefined) patch.llm_model = input.llmModel;
+    if (input.scheduleConfig !== undefined) Object.assign(patch, scheduleColumns(input.scheduleConfig));
+    if (input.status !== undefined) patch.status = input.status;
+    if (input.encryptedPageAccessToken !== undefined) patch.encrypted_page_access_token = input.encryptedPageAccessToken;
+    if (input.pageAccessTokenMask !== undefined) patch.page_access_token_mask = input.pageAccessTokenMask;
+
+    const row = await this.updateOne("facebook_pages", { id: this.eq(id) }, patch, `Fanpage ${id} not found`);
+
+    await this.updateOne(
+      "campaigns",
+      { id: this.eq(existing.campaignId) },
+      {
+        updated_at: timestamp,
+        name: row.name,
+        topic: row.topic,
+        language: row.language,
+        brand_voice: row.brand_voice,
+        target_page_id: row.facebook_page_id,
+        llm_provider: row.llm_provider,
+        llm_model: row.llm_model,
+        status: row.status
+      },
+      `Campaign ${existing.campaignId} not found`
+    );
+    return toFanpage(row);
+  }
+
+  async updateFanpageSchedule(id: string, scheduleConfig: FanpageScheduleConfig): Promise<Fanpage> {
+    return this.updateFanpage(id, { scheduleConfig });
+  }
+
+  async listSchedulableFanpages(): Promise<Fanpage[]> {
+    const rows = await this.selectMany("facebook_pages", {
+      schedule_enabled: this.eq("true"),
+      status: this.eq(campaignStatuses.active),
+      order: "updated_at.asc"
+    });
+    return rows.map(toFanpage);
+  }
+
+  async markFanpageScheduled(id: string, scheduledAt: string): Promise<Fanpage> {
+    const row = await this.updateOne(
+      "facebook_pages",
+      { id: this.eq(id) },
+      { last_scheduled_at: scheduledAt, updated_at: nowIso() },
+      `Fanpage ${id} not found`
+    );
+    return toFanpage(row);
   }
 
   async createSource(campaignId: string, input: CreateSourceInput): Promise<Source> {
@@ -279,13 +426,16 @@ export class SupabaseDatabase implements DatabaseRepository {
     return this.getDraft(row.id);
   }
 
-  async listDrafts(status?: DraftStatus): Promise<PostDraft[]> {
+  async listDrafts(filters?: DraftFilters | DraftStatus): Promise<PostDraft[]> {
+    const normalized = typeof filters === "string" ? { status: filters } : filters;
+    const fanpage = normalized?.fanpageId ? await this.getFanpage(normalized.fanpageId) : undefined;
     const rows = await this.selectMany<"post_drafts", PostDraftJoinedRow>("post_drafts", {
       select: DRAFT_SELECT,
-      ...(status ? { status: this.eq(status) } : {}),
+      ...(normalized?.status ? { status: this.eq(normalized.status) } : {}),
+      ...(fanpage ? { campaign_id: this.eq(fanpage.campaignId) } : {}),
       order: "created_at.desc"
     });
-    return rows.map(toPostDraft);
+    return Promise.all(rows.map((row) => this.hydrateDraft(row)));
   }
 
   async getDraft(id: string): Promise<PostDraft> {
@@ -294,7 +444,7 @@ export class SupabaseDatabase implements DatabaseRepository {
       { select: DRAFT_SELECT, id: this.eq(id) },
       `Draft ${id} not found`
     );
-    return toPostDraft(row);
+    return this.hydrateDraft(row);
   }
 
   async updateDraftStatus(id: string, status: DraftStatus, approvalStatus: ApprovalStatus): Promise<PostDraft> {
@@ -322,9 +472,10 @@ export class SupabaseDatabase implements DatabaseRepository {
     return toPublishedPost(row);
   }
 
-  async listPublishedPosts(): Promise<PublishedPost[]> {
+  async listPublishedPosts(filters: PublishedPostFilters = {}): Promise<PublishedPost[]> {
     const rows = await this.selectMany("published_posts", { order: "created_at.desc" });
-    return rows.map(toPublishedPost);
+    const posts = await Promise.all(rows.map((row) => this.hydratePublishedPost(row)));
+    return filters.fanpageId ? posts.filter((post) => post.fanpage?.id === filters.fanpageId) : posts;
   }
 
   async addAgentRun(input: CreateAgentRunInput): Promise<AgentRun> {
@@ -426,6 +577,32 @@ export class SupabaseDatabase implements DatabaseRepository {
     });
     const row = rows[0];
     return row ? toContentItem(row) : undefined;
+  }
+
+  private async findFanpageByCampaignId(campaignId: string): Promise<FanpageRow | undefined> {
+    const rows = await this.selectMany("facebook_pages", {
+      campaign_id: this.eq(campaignId),
+      limit: SELECT_ONE_LIMIT
+    });
+    return rows[0];
+  }
+
+  private async hydrateDraft(row: PostDraftJoinedRow): Promise<PostDraft> {
+    const draft = toPostDraft(row);
+    const fanpage = await this.getFanpageByCampaignId(draft.campaignId);
+    return {
+      ...draft,
+      ...(fanpage ? { fanpage: toFanpageSummary(fanpage) } : {})
+    };
+  }
+
+  private async hydratePublishedPost(row: PublishedPostRow): Promise<PublishedPost> {
+    const post = toPublishedPost(row);
+    const draft = await this.getDraft(post.postDraftId).catch(() => undefined);
+    return {
+      ...post,
+      ...(draft?.fanpage ? { fanpage: draft.fanpage } : {})
+    };
   }
 
   private async hydrateAgentWorkflowRun(row: AgentWorkflowRunRow): Promise<AgentWorkflowRunDetail> {
@@ -628,6 +805,66 @@ function toCampaign(row: CampaignRow): Campaign {
     status: row.status as CampaignStatus,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function toFanpage(row: FanpageRow): Fanpage {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    name: row.name,
+    facebookPageId: row.facebook_page_id,
+    environment: row.environment as FanpageEnvironment,
+    topic: row.topic,
+    language: row.language,
+    brandVoice: row.brand_voice,
+    llmProvider: row.llm_provider as LlmProvider,
+    llmModel: row.llm_model,
+    scheduleConfig: {
+      enabled: row.schedule_enabled,
+      postsPerDay: row.schedule_posts_per_day,
+      intervalMinutes: row.schedule_interval_minutes,
+      startTimeLocal: row.schedule_start_time_local,
+      timezone: row.schedule_timezone
+    },
+    hasPageAccessToken: Boolean(row.encrypted_page_access_token),
+    ...(row.page_access_token_mask ? { pageAccessTokenMask: row.page_access_token_mask } : {}),
+    status: row.status as CampaignStatus,
+    ...(row.last_scheduled_at ? { lastScheduledAt: row.last_scheduled_at } : {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function toFanpageSummary(fanpage: Fanpage): FanpageSummary {
+  return {
+    id: fanpage.id,
+    campaignId: fanpage.campaignId,
+    name: fanpage.name,
+    facebookPageId: fanpage.facebookPageId,
+    environment: fanpage.environment,
+    status: fanpage.status
+  };
+}
+
+function toFanpageTokenRecord(row: FanpageRow): FanpageTokenRecord {
+  const encryptedPageAccessToken = row.encrypted_page_access_token ?? undefined;
+  return {
+    fanpage: toFanpage(row),
+    ...(encryptedPageAccessToken ? { encryptedPageAccessToken } : {})
+  };
+}
+
+function scheduleColumns(scheduleConfig: FanpageScheduleConfig): Pick<
+  TablesInsert<"facebook_pages">,
+  "schedule_enabled" | "schedule_posts_per_day" | "schedule_interval_minutes" | "schedule_start_time_local" | "schedule_timezone"
+> {
+  return {
+    schedule_enabled: scheduleConfig.enabled,
+    schedule_posts_per_day: scheduleConfig.postsPerDay,
+    schedule_interval_minutes: scheduleConfig.intervalMinutes,
+    schedule_start_time_local: scheduleConfig.startTimeLocal,
+    schedule_timezone: scheduleConfig.timezone
   };
 }
 

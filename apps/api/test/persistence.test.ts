@@ -31,6 +31,30 @@ const contentRow = {
   created_at: "2026-05-01T00:00:00.000Z"
 };
 
+const fanpageRow = {
+  id: "fanpage_1",
+  campaign_id: "camp_1",
+  name: "Launch fanpage",
+  facebook_page_id: "page_1",
+  environment: "sandbox",
+  topic: "AI operations",
+  language: "vi",
+  brand_voice: "helpful, concise, practical",
+  llm_provider: "mock",
+  llm_model: "mock-copywriter-v1",
+  schedule_enabled: true,
+  schedule_posts_per_day: 2,
+  schedule_interval_minutes: 240,
+  schedule_start_time_local: "09:00",
+  schedule_timezone: "Asia/Saigon",
+  encrypted_page_access_token: "encrypted-token",
+  page_access_token_mask: "****1234",
+  status: "ACTIVE",
+  last_scheduled_at: null,
+  created_at: "2026-05-01T00:00:00.000Z",
+  updated_at: "2026-05-01T00:00:00.000Z"
+};
+
 function db() {
   return new SupabaseDatabase(
     new ConfigService({
@@ -109,7 +133,8 @@ describe("SupabaseDatabase", () => {
   it("patches only supplied campaign fields during updates", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse([{ ...campaignRow, brand_voice: "direct", status: "PAUSED" }]));
+      .mockResolvedValueOnce(jsonResponse([{ ...campaignRow, brand_voice: "direct", status: "PAUSED" }]))
+      .mockResolvedValueOnce(jsonResponse([]));
 
     const campaign = await db().updateCampaign("camp_1", { brandVoice: "direct", status: "PAUSED" });
 
@@ -127,6 +152,49 @@ describe("SupabaseDatabase", () => {
     );
   });
 
+  it("creates and maps fanpages with redacted token metadata", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse([campaignRow], { status: 201 }))
+      .mockResolvedValueOnce(jsonResponse([fanpageRow], { status: 201 }));
+
+    const fanpage = await db().createFanpage({
+      name: "Launch fanpage",
+      facebookPageId: "page_1",
+      environment: "sandbox",
+      topic: "AI operations",
+      language: "vi",
+      brandVoice: "helpful, concise, practical",
+      llmProvider: "mock",
+      llmModel: "mock-copywriter-v1",
+      scheduleConfig: {
+        enabled: true,
+        postsPerDay: 2,
+        intervalMinutes: 240,
+        startTimeLocal: "09:00",
+        timezone: "Asia/Saigon"
+      },
+      encryptedPageAccessToken: "encrypted-token",
+      pageAccessTokenMask: "****1234"
+    });
+
+    expect(fanpage).toMatchObject({
+      id: "fanpage_1",
+      campaignId: "camp_1",
+      environment: "sandbox",
+      scheduleConfig: { enabled: true, postsPerDay: 2 },
+      hasPageAccessToken: true,
+      pageAccessTokenMask: "****1234"
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://project.supabase.co/rest/v1/facebook_pages?select=*");
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("\"encrypted_page_access_token\":\"encrypted-token\"")
+      })
+    );
+  });
+
   it("throws NotFoundException when a selected row is missing", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse([]));
 
@@ -140,33 +208,35 @@ describe("SupabaseDatabase", () => {
   });
 
   it("hydrates joined draft rows with content and image assets", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      jsonResponse([
-        {
-          id: "draft_1",
-          campaign_id: "camp_1",
-          content_item_id: "content_1",
-          image_asset_id: "image_1",
-          text: "Draft",
-          status: "PENDING_APPROVAL",
-          risk_score: 25,
-          risk_flags: ["flag"],
-          approval_status: "PENDING",
-          created_at: "2026-05-01T00:00:00.000Z",
-          updated_at: "2026-05-01T00:00:00.000Z",
-          content_items: contentRow,
-          image_assets: {
-            id: "image_1",
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "draft_1",
             campaign_id: "camp_1",
-            source_url: "https://example.com/image.png",
-            r2_key: "campaigns/camp_1/image.png",
-            public_url: "https://cdn.example.com/image.png",
-            mime_type: "image/png",
-            created_at: "2026-05-01T00:00:00.000Z"
+            content_item_id: "content_1",
+            image_asset_id: "image_1",
+            text: "Draft",
+            status: "PENDING_APPROVAL",
+            risk_score: 25,
+            risk_flags: ["flag"],
+            approval_status: "PENDING",
+            created_at: "2026-05-01T00:00:00.000Z",
+            updated_at: "2026-05-01T00:00:00.000Z",
+            content_items: contentRow,
+            image_assets: {
+              id: "image_1",
+              campaign_id: "camp_1",
+              source_url: "https://example.com/image.png",
+              r2_key: "campaigns/camp_1/image.png",
+              public_url: "https://cdn.example.com/image.png",
+              mime_type: "image/png",
+              created_at: "2026-05-01T00:00:00.000Z"
+            }
           }
-        }
-      ])
-    );
+        ])
+      )
+      .mockResolvedValueOnce(jsonResponse([fanpageRow]));
 
     const drafts = await db().listDrafts("PENDING_APPROVAL");
 
@@ -174,7 +244,8 @@ describe("SupabaseDatabase", () => {
       expect.objectContaining({
         id: "draft_1",
         contentItem: expect.objectContaining({ id: "content_1", rawText: "Text" }),
-        imageAsset: expect.objectContaining({ id: "image_1", publicUrl: "https://cdn.example.com/image.png" })
+        imageAsset: expect.objectContaining({ id: "image_1", publicUrl: "https://cdn.example.com/image.png" }),
+        fanpage: expect.objectContaining({ id: "fanpage_1", environment: "sandbox" })
       })
     ]);
   });
@@ -247,6 +318,26 @@ describe("SupabaseDatabase", () => {
       .mockResolvedValueOnce(
         jsonResponse([
           {
+            id: "draft_1",
+            campaign_id: "camp_1",
+            content_item_id: "content_1",
+            image_asset_id: null,
+            text: "Draft",
+            status: "PUBLISHED",
+            risk_score: 0,
+            risk_flags: [],
+            approval_status: "APPROVED",
+            created_at: "2026-05-01T00:00:00.000Z",
+            updated_at: "2026-05-01T00:00:00.000Z",
+            content_items: contentRow,
+            image_assets: null
+          }
+        ])
+      )
+      .mockResolvedValueOnce(jsonResponse([fanpageRow]))
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
             id: "run_1",
             campaign_id: "camp_1",
             graph_run_id: "graph_1",
@@ -303,6 +394,14 @@ describe("SupabaseDatabase", () => {
         status: "FAILED",
         publishPayload: { draftId: "draft_1" },
         errorMessage: "Meta rejected post",
+        fanpage: {
+          id: "fanpage_1",
+          campaignId: "camp_1",
+          name: "Launch fanpage",
+          facebookPageId: "page_1",
+          environment: "sandbox",
+          status: "ACTIVE"
+        },
         createdAt: "2026-05-01T00:00:00.000Z"
       }
     ]);

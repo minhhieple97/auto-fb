@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post, Query } from "@nestjs/common";
 import { adminPermissions, publishOptionsSchema, type PublishOptions } from "@auto-fb/shared";
 import { RequirePermissions } from "../auth/permissions.decorator.js";
 import { apiRoutes } from "../common/api-routes.js";
@@ -21,7 +21,9 @@ export class PublishingController {
   }
 
   @Get(apiRoutes.publishedPosts)
-  async list() {
-    return this.db.listPublishedPosts();
+  async list(@Query("fanpageId") fanpageId?: string) {
+    return this.db.listPublishedPosts({
+      ...(fanpageId ? { fanpageId } : {})
+    });
   }
 }

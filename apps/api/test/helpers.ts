@@ -4,7 +4,9 @@ import type {
   Campaign,
   ContentItem,
   CreateCampaignInput,
+  CreateFanpageInput,
   CreateSourceInput,
+  Fanpage,
   ImageAsset,
   PostDraft,
   PublishedPost,
@@ -50,6 +52,55 @@ export function buildCampaign(overrides: Partial<Campaign> = {}): Campaign {
   return {
     id: "camp_1",
     ...buildCampaignInput(),
+    status: "ACTIVE",
+    createdAt: fixedIso,
+    updatedAt: fixedIso,
+    ...overrides
+  };
+}
+
+export function buildFanpageInput(overrides: Partial<CreateFanpageInput> = {}): CreateFanpageInput {
+  return {
+    name: "Launch fanpage",
+    facebookPageId: "page_1",
+    environment: "sandbox",
+    topic: "AI operations",
+    language: "vi",
+    brandVoice: "helpful, concise, practical",
+    llmProvider: "mock",
+    llmModel: "mock-copywriter-v1",
+    scheduleConfig: {
+      enabled: false,
+      postsPerDay: 1,
+      intervalMinutes: 1440,
+      startTimeLocal: "09:00",
+      timezone: "Asia/Saigon"
+    },
+    ...overrides
+  };
+}
+
+export function buildFanpage(overrides: Partial<Fanpage> = {}): Fanpage {
+  return {
+    id: "fanpage_1",
+    campaignId: "camp_1",
+    name: "Launch fanpage",
+    facebookPageId: "page_1",
+    environment: "sandbox",
+    topic: "AI operations",
+    language: "vi",
+    brandVoice: "helpful, concise, practical",
+    llmProvider: "mock",
+    llmModel: "mock-copywriter-v1",
+    scheduleConfig: {
+      enabled: false,
+      postsPerDay: 1,
+      intervalMinutes: 1440,
+      startTimeLocal: "09:00",
+      timezone: "Asia/Saigon"
+    },
+    hasPageAccessToken: true,
+    pageAccessTokenMask: "****1234",
     status: "ACTIVE",
     createdAt: fixedIso,
     updatedAt: fixedIso,

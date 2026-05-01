@@ -1,12 +1,43 @@
 import { BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PageTokenCryptoService } from "../src/fanpages/page-token-crypto.service.js";
 import { PublisherAgentService } from "../src/publishing/publisher-agent.service.js";
 import { FakeDatabase } from "./fake-database.js";
 import { buildCampaignInput, jsonResponse } from "./helpers.js";
 
-function seedDraft(db: FakeDatabase, options: { approved?: boolean; imagePublicUrl?: string } = {}) {
-  const campaign = db.createCampaign(buildCampaignInput({ targetPageId: "page_1" }));
+function crypto(config = new ConfigService()) {
+  return new PageTokenCryptoService(config);
+}
+
+function publisher(config: ConfigService, db: FakeDatabase) {
+  return new PublisherAgentService(config, db, crypto(config));
+}
+
+function seedDraft(db: FakeDatabase, options: { approved?: boolean; imagePublicUrl?: string; fanpageToken?: string; environment?: "sandbox" | "production" } = {}) {
+  const campaign = options.fanpageToken
+    ? db.getCampaign(
+        db.createFanpage({
+          name: "Launch fanpage",
+          facebookPageId: "page_1",
+          environment: options.environment ?? "sandbox",
+          topic: "AI operations",
+          language: "vi",
+          brandVoice: "helpful, concise, practical",
+          llmProvider: "mock",
+          llmModel: "mock-copywriter-v1",
+          scheduleConfig: {
+            enabled: false,
+            postsPerDay: 1,
+            intervalMinutes: 1440,
+            startTimeLocal: "09:00",
+            timezone: "Asia/Saigon"
+          },
+          encryptedPageAccessToken: crypto().encrypt(options.fanpageToken),
+          pageAccessTokenMask: "****oken"
+        }).campaignId
+      )
+    : db.createCampaign(buildCampaignInput({ targetPageId: "page_1" }));
   const content = db.createContentItem({
     campaignId: campaign.id,
     sourceId: "src_1",
@@ -47,14 +78,14 @@ describe("PublisherAgentService", () => {
     const db = new FakeDatabase();
     const { draft } = seedDraft(db);
 
-    await expect(new PublisherAgentService(new ConfigService(), db).publishDraft(draft.id)).rejects.toThrow(BadRequestException);
+    await expect(publisher(new ConfigService(), db).publishDraft(draft.id)).rejects.toThrow(BadRequestException);
   });
 
   it("publishes approved drafts in dry-run mode by default and marks the draft as published", async () => {
     const db = new FakeDatabase();
     const { draft } = seedDraft(db, { approved: true });
 
-    const post = await new PublisherAgentService(new ConfigService(), db).publishDraft(draft.id);
+    const post = await publisher(new ConfigService(), db).publishDraft(draft.id);
 
     expect(post).toMatchObject({
       postDraftId: draft.id,
@@ -75,8 +106,9 @@ describe("PublisherAgentService", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const db = new FakeDatabase();
     const { draft } = seedDraft(db, { approved: true });
-    const service = new PublisherAgentService(
-      new ConfigService({ PUBLISH_DRY_RUN: "false", META_PAGE_ACCESS_TOKEN: "page_token" }),
+    const config = new ConfigService({ PUBLISH_DRY_RUN: "false", META_PAGE_ACCESS_TOKEN: "page_token" });
+    const service = publisher(
+      config,
       db
     );
 
@@ -89,15 +121,8 @@ describe("PublisherAgentService", () => {
   it("publishes text posts through Meta Graph API when dry-run is disabled", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ id: "page_1_post_1" }));
     const db = new FakeDatabase();
-    const { draft } = seedDraft(db, { approved: true });
-    const service = new PublisherAgentService(
-      new ConfigService({
-        PUBLISH_DRY_RUN: "false",
-        META_PAGE_ACCESS_TOKEN: "page_token",
-        META_GRAPH_API_VERSION: "v20.0"
-      }),
-      db
-    );
+    const { draft } = seedDraft(db, { approved: true, fanpageToken: "fanpage_token" });
+    const service = publisher(new ConfigService({ PUBLISH_DRY_RUN: "false", META_GRAPH_API_VERSION: "v20.0" }), db);
 
     const post = await service.publishDraft(draft.id);
 
@@ -107,18 +132,73 @@ describe("PublisherAgentService", () => {
       expect.objectContaining({ method: "POST", body: expect.any(URLSearchParams) })
     );
     const body = fetchMock.mock.calls[0]?.[1]?.body as URLSearchParams;
-    expect(body.get("access_token")).toBe("page_token");
+    expect(body.get("access_token")).toBe("fanpage_token");
     expect(body.get("message")).toBe("Draft text");
+  });
+
+  it("requires explicit confirmation before real production fanpage publishing", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const db = new FakeDatabase();
+    const { draft } = seedDraft(db, { approved: true, fanpageToken: "fanpage_token", environment: "production" });
+    const service = publisher(new ConfigService({ PUBLISH_DRY_RUN: "false" }), db);
+
+    await expect(service.publishDraft(draft.id)).rejects.toThrow("Production fanpage publishing requires confirmation");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("records missing per-fanpage tokens as failed real publish attempts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const db = new FakeDatabase();
+    const fanpage = db.createFanpage({
+      name: "Launch fanpage",
+      facebookPageId: "page_1",
+      environment: "sandbox",
+      topic: "AI operations",
+      language: "vi",
+      brandVoice: "helpful, concise, practical",
+      llmProvider: "mock",
+      llmModel: "mock-copywriter-v1",
+      scheduleConfig: {
+        enabled: false,
+        postsPerDay: 1,
+        intervalMinutes: 1440,
+        startTimeLocal: "09:00",
+        timezone: "Asia/Saigon"
+      }
+    });
+    const campaign = db.getCampaign(fanpage.campaignId);
+    const content = db.createContentItem({
+      campaignId: campaign.id,
+      sourceId: "src_1",
+      sourceUrl: "https://example.com/story",
+      title: "Story",
+      rawText: "Text",
+      summary: "Summary",
+      imageUrls: [],
+      hash: "hash_missing_token"
+    }).item;
+    const draft = db.createDraft({
+      campaignId: campaign.id,
+      contentItemId: content.id,
+      text: "Draft text",
+      status: "APPROVED",
+      riskScore: 0,
+      riskFlags: [],
+      approvalStatus: "APPROVED"
+    });
+    const service = publisher(new ConfigService({ PUBLISH_DRY_RUN: "false" }), db);
+
+    const post = await service.publishDraft(draft.id);
+
+    expect(post).toMatchObject({ status: "FAILED", errorMessage: `Missing Page Access Token for fanpage ${fanpage.id}` });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("publishes image posts through the photos endpoint", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ post_id: "photo_post_1" }));
     const db = new FakeDatabase();
-    const { draft } = seedDraft(db, { approved: true, imagePublicUrl: "https://cdn.example.com/image.png" });
-    const service = new PublisherAgentService(
-      new ConfigService({ PUBLISH_DRY_RUN: "false", META_PAGE_ACCESS_TOKEN: "page_token" }),
-      db
-    );
+    const { draft } = seedDraft(db, { approved: true, imagePublicUrl: "https://cdn.example.com/image.png", fanpageToken: "fanpage_token" });
+    const service = publisher(new ConfigService({ PUBLISH_DRY_RUN: "false" }), db);
 
     const post = await service.publishDraft(draft.id);
 
@@ -132,11 +212,8 @@ describe("PublisherAgentService", () => {
   it("records a failed published-post attempt when Meta publishing fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ error: { message: "Meta rejected post" } }, { status: 400 }));
     const db = new FakeDatabase();
-    const { draft } = seedDraft(db, { approved: true });
-    const service = new PublisherAgentService(
-      new ConfigService({ PUBLISH_DRY_RUN: "false", META_PAGE_ACCESS_TOKEN: "page_token" }),
-      db
-    );
+    const { draft } = seedDraft(db, { approved: true, fanpageToken: "fanpage_token" });
+    const service = publisher(new ConfigService({ PUBLISH_DRY_RUN: "false" }), db);
 
     const post = await service.publishDraft(draft.id);
 
@@ -147,11 +224,8 @@ describe("PublisherAgentService", () => {
   it("records image publishing configuration failures without marking the draft as published", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const db = new FakeDatabase();
-    const { draft } = seedDraft(db, { approved: true, imagePublicUrl: "" });
-    const service = new PublisherAgentService(
-      new ConfigService({ PUBLISH_DRY_RUN: "false", META_PAGE_ACCESS_TOKEN: "page_token" }),
-      db
-    );
+    const { draft } = seedDraft(db, { approved: true, imagePublicUrl: "", fanpageToken: "fanpage_token" });
+    const service = publisher(new ConfigService({ PUBLISH_DRY_RUN: "false" }), db);
 
     const post = await service.publishDraft(draft.id);
 

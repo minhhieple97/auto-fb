@@ -23,9 +23,12 @@ export class DraftsController {
   ) {}
 
   @Get()
-  async list(@Query("status") status?: DraftStatus) {
+  async list(@Query("status") status?: DraftStatus, @Query("fanpageId") fanpageId?: string) {
     const parsedStatus = status ? draftStatusSchema.parse(status) : undefined;
-    return this.db.listDrafts(parsedStatus);
+    return this.db.listDrafts({
+      ...(parsedStatus ? { status: parsedStatus } : {}),
+      ...(fanpageId ? { fanpageId } : {})
+    });
   }
 
   @Post(apiRoutes.draftApprove)

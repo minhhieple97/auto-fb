@@ -17,6 +17,10 @@ type AgentWorkflowJob = {
   graphRunId: string;
 };
 
+type EnqueueWorkflowOptions = {
+  graphRunId?: string;
+};
+
 @Injectable()
 export class AgentWorkflowQueueService implements OnModuleDestroy {
   private readonly queue?: Queue<AgentWorkflowJob>;
@@ -36,12 +40,12 @@ export class AgentWorkflowQueueService implements OnModuleDestroy {
     }
   }
 
-  async enqueue(campaignId: string, actor: SupabaseActor): Promise<AgentWorkflowRunDetail> {
+  async enqueue(campaignId: string, actor: SupabaseActor, options: EnqueueWorkflowOptions = {}): Promise<AgentWorkflowRunDetail> {
     if (!this.queue) {
       throw new InternalServerErrorException(`${envKeys.redisUrl} is required to enqueue agent workflow runs`);
     }
 
-    const graphRunId = randomUUID();
+    const graphRunId = options.graphRunId ?? randomUUID();
     const run = await this.db.createAgentWorkflowRun({
       campaignId,
       graphRunId,

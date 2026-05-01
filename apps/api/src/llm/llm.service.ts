@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { llmProviders, type LlmProvider } from "@auto-fb/shared";
 import { envKeys, nodeEnvironments } from "../common/app.constants.js";
 import { HttpLlmClient } from "./http-llm.client.js";
-import type { GeneratePostInput, GeneratePostResult, LlmClient } from "./llm.types.js";
+import type { GeneratePostInput, GeneratePostResult, LlmClient, SearchContentInput, SearchContentResult } from "./llm.types.js";
 import { MockLlmClient } from "./mock-llm.client.js";
 import { getProviderDefinition, providerDefinitions } from "./provider-registry.js";
 
@@ -18,6 +18,11 @@ export class LlmService {
   async generatePost(input: GeneratePostInput): Promise<GeneratePostResult> {
     const client = this.createClient(input.provider);
     return client.generatePost(input);
+  }
+
+  async searchContent(input: SearchContentInput): Promise<SearchContentResult> {
+    const client = this.createClient(input.provider);
+    return client.searchContent(input);
   }
 
   createClient(provider: LlmProvider): LlmClient {

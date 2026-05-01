@@ -2,7 +2,8 @@ import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { approvalStatuses, draftStatuses, publishStatuses, type PostDraft, type PublishedPost, type PublishOptions } from "@auto-fb/shared";
 import { appDefaults, envKeys } from "../common/app.constants.js";
-import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
+import { PageTokenCryptoService } from "../fanpages/page-token-crypto.service.js";
+import { DATABASE_REPOSITORY, type DatabaseRepository, type FanpageTokenRecord } from "../persistence/database.repository.js";
 import { publishingDefaults } from "./publishing.constants.js";
 
 type PublishPayload = {
@@ -11,13 +12,16 @@ type PublishPayload = {
   imageUrl?: string;
   campaignId: string;
   draftId: string;
+  fanpageId?: string;
+  fanpageEnvironment?: string;
 };
 
 @Injectable()
 export class PublisherAgentService {
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService,
-    @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository
+    @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository,
+    private readonly tokenCrypto: PageTokenCryptoService
   ) {}
 
   async publishDraft(draftId: string, options: PublishOptions = {}): Promise<PublishedPost> {
@@ -27,21 +31,30 @@ export class PublisherAgentService {
     }
 
     const campaign = await this.db.getCampaign(draft.campaignId);
+    const fanpageRecord = await this.db.getFanpageTokenRecordByCampaignId(campaign.id);
+    const fanpage = fanpageRecord?.fanpage;
+    const pageId = fanpage?.facebookPageId ?? campaign.targetPageId;
     const payload: PublishPayload = {
-      pageId: campaign.targetPageId,
+      pageId,
       message: draft.text,
       campaignId: campaign.id,
       draftId: draft.id,
+      ...(fanpage ? { fanpageId: fanpage.id, fanpageEnvironment: fanpage.environment } : {}),
       ...(draft.imageAsset?.publicUrl ? { imageUrl: draft.imageAsset.publicUrl } : {})
     };
 
     const dryRun = options.dryRun ?? this.config.get<string>(envKeys.publishDryRun, appDefaults.publishDryRun) !== "false";
+    if (!dryRun && fanpage?.environment === "production" && options.confirmProduction !== true) {
+      throw new BadRequestException("Production fanpage publishing requires confirmation");
+    }
 
     try {
-      const facebookPostId = dryRun ? `${publishingDefaults.dryRunPostIdPrefix}${draft.id}` : await this.publishToMeta(payload, draft);
+      const facebookPostId = dryRun
+        ? `${publishingDefaults.dryRunPostIdPrefix}${draft.id}`
+        : await this.publishToMeta(payload, draft, this.resolvePageToken(fanpageRecord));
       const post = await this.db.createPublishedPost({
         postDraftId: draft.id,
-        facebookPageId: campaign.targetPageId,
+        facebookPageId: pageId,
         facebookPostId,
         status: dryRun ? publishStatuses.dryRunPublished : publishStatuses.published,
         publishPayload: payload,
@@ -52,7 +65,7 @@ export class PublisherAgentService {
     } catch (error) {
       return this.db.createPublishedPost({
         postDraftId: draft.id,
-        facebookPageId: campaign.targetPageId,
+        facebookPageId: pageId,
         status: publishStatuses.failed,
         publishPayload: payload,
         errorMessage: error instanceof Error ? error.message : String(error)
@@ -60,9 +73,19 @@ export class PublisherAgentService {
     }
   }
 
-  private async publishToMeta(payload: PublishPayload, draft: PostDraft): Promise<string> {
-    const token = this.config.get<string>(envKeys.metaPageAccessToken);
-    if (!token) throw new Error(`Missing ${envKeys.metaPageAccessToken}`);
+  private resolvePageToken(fanpageRecord: FanpageTokenRecord | undefined): string {
+    if (fanpageRecord) {
+      if (!fanpageRecord.encryptedPageAccessToken) {
+        throw new Error(`Missing Page Access Token for fanpage ${fanpageRecord.fanpage.id}`);
+      }
+      return this.tokenCrypto.decrypt(fanpageRecord.encryptedPageAccessToken);
+    }
+    const legacyToken = this.config.get<string>(envKeys.metaPageAccessToken);
+    if (!legacyToken) throw new Error(`Missing ${envKeys.metaPageAccessToken}`);
+    return legacyToken;
+  }
+
+  private async publishToMeta(payload: PublishPayload, draft: PostDraft, token: string): Promise<string> {
     if (!payload.pageId) throw new Error("Missing campaign target Page ID");
     if (draft.imageAssetId && !payload.imageUrl) throw new Error(`Image draft requires ${envKeys.r2PublicBaseUrl}`);
 

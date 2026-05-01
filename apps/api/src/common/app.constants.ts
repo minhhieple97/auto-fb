@@ -1,5 +1,7 @@
 export const envKeys = {
   apiPort: "API_PORT",
+  facebookPageTokenEncryptionKey: "FACEBOOK_PAGE_TOKEN_ENCRYPTION_KEY",
+  fanpageSchedulerIntervalMs: "FANPAGE_SCHEDULER_INTERVAL_MS",
   metaGraphApiVersion: "META_GRAPH_API_VERSION",
   metaPageAccessToken: "META_PAGE_ACCESS_TOKEN",
   nodeEnv: "NODE_ENV",
@@ -21,6 +23,7 @@ export const envKeys = {
 
 export const appDefaults = {
   metaGraphApiVersion: "v20.0",
+  fanpageSchedulerIntervalMs: 60_000,
   port: 3000,
   publishDryRun: "true",
   r2Bucket: "auto-fb-assets",
