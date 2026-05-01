@@ -2,6 +2,7 @@ import { NotFoundException } from "@nestjs/common";
 import type {
   AgentRun,
   AgentWorkflowRunDetail,
+  AdminProfile,
   ApprovalStatus,
   Campaign,
   CampaignStatus,
@@ -32,6 +33,7 @@ import type {
 } from "../src/persistence/database.repository.js";
 
 export class FakeDatabase implements DatabaseRepository {
+  private adminProfiles = new Map<string, AdminProfile>();
   private campaigns = new Map<string, Campaign>();
   private sources = new Map<string, Source>();
   private contentItems = new Map<string, ContentItem>();
@@ -40,6 +42,18 @@ export class FakeDatabase implements DatabaseRepository {
   private publishedPosts = new Map<string, PublishedPost>();
   private agentRuns = new Map<string, AgentRun>();
   private agentWorkflowRuns = new Map<string, AgentWorkflowRunDetail>();
+
+  getAdminProfileForAuthUser(authUserId: string, email?: string): AdminProfile | undefined {
+    const normalizedEmail = email?.trim().toLowerCase();
+    const profile =
+      this.adminProfiles.get(authUserId) ??
+      [...this.adminProfiles.values()].find((item) => normalizedEmail && item.email.toLowerCase() === normalizedEmail);
+    return profile?.status === "active" ? this.clone(profile) : undefined;
+  }
+
+  upsertAdminProfile(profile: AdminProfile): void {
+    this.adminProfiles.set(profile.authUserId, this.clone(profile));
+  }
 
   createCampaign(input: CreateCampaignInput): Campaign {
     const timestamp = nowIso();
@@ -296,6 +310,7 @@ export class FakeDatabase implements DatabaseRepository {
     this.publishedPosts.clear();
     this.agentRuns.clear();
     this.agentWorkflowRuns.clear();
+    this.adminProfiles.clear();
   }
 
   private hydrateDraft(draft: PostDraft): PostDraft {

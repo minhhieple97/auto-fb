@@ -16,6 +16,12 @@ vi.mock("../../lib/api-client.js", () => ({
   }
 }));
 
+vi.mock("../../app/auth-provider.js", () => ({
+  useAuth: () => ({
+    hasPermission: () => true
+  })
+}));
+
 const workflowRuns = vi.mocked(api.agentWorkflowRuns);
 const campaigns = vi.mocked(api.campaigns);
 const streamAgentWorkflowRuns = vi.mocked(api.streamAgentWorkflowRuns);

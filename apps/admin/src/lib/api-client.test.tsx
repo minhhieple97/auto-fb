@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "./api-client.js";
+import { ApiClientError, api } from "./api-client.js";
 
 const authTokenMock = vi.hoisted(() => vi.fn());
 
@@ -44,5 +44,25 @@ describe("api client auth headers", () => {
     );
 
     await expect(api.campaigns()).rejects.toThrow("Campaign not found");
+    await expect(api.campaigns()).rejects.toBeInstanceOf(ApiClientError);
+  });
+
+  it("loads the current admin profile", async () => {
+    authTokenMock.mockReturnValue("jwt-1");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          authUserId: "user-1",
+          email: "admin@example.com",
+          role: "owner",
+          status: "active",
+          permissions: ["read:dashboard_data"]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+
+    await expect(api.me()).resolves.toMatchObject({ email: "admin@example.com", role: "owner" });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/auth/me");
   });
 });

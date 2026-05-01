@@ -91,4 +91,11 @@ describe("CampaignPanel", () => {
     expect(screen.getByText("Facebook Page ID is required.")).toBeInTheDocument();
     expect(createCampaign).not.toHaveBeenCalled();
   });
+
+  it("does not expose campaign creation controls without permission", async () => {
+    renderWithClient(<CampaignPanel canCreate={false} selectedCampaignId={undefined} onSelect={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(await screen.findByText("Launch")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /create/i })).not.toBeInTheDocument();
+  });
 });

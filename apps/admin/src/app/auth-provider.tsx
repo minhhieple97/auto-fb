@@ -1,11 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
+import type { AdminPermission, AdminProfile } from "@auto-fb/shared";
+import { ApiClientError, api } from "../lib/api-client.js";
 import { getSupabaseClient, isSupabaseConfigured, missingSupabaseEnv, setCurrentAuthSession } from "../lib/supabase.js";
 
-type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "unconfigured";
+type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "unconfigured" | "blocked";
 
 type AuthState = {
   error?: string;
+  profile: AdminProfile | null;
   session: Session | null;
   status: AuthStatus;
   user: User | null;
@@ -17,12 +20,16 @@ type SignInInput = {
 };
 
 type AuthContextValue = AuthState & {
+  hasPermission: (permission: AdminPermission) => boolean;
   signIn: (input: SignInInput) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 type AuthAction =
   | { session: Session | null; type: "sessionChanged" }
+  | { session: Session; type: "sessionLoading" }
+  | { profile: AdminProfile; session: Session; type: "profileLoaded" }
+  | { message: string; session: Session; type: "accessDenied" }
   | { message: string; type: "authFailed" }
   | { message: string; type: "unconfigured" }
   | { message: string; type: "localError" };
@@ -30,6 +37,7 @@ type AuthAction =
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const initialState: AuthState = {
+  profile: null,
   session: null,
   status: "loading",
   user: null
@@ -37,6 +45,7 @@ const initialState: AuthState = {
 
 function stateFromSession(session: Session | null): AuthState {
   return {
+    profile: null,
     session,
     status: session ? "authenticated" : "unauthenticated",
     user: session?.user ?? null
@@ -47,9 +56,32 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
   switch (action.type) {
     case "sessionChanged":
       return stateFromSession(action.session);
+    case "sessionLoading":
+      return {
+        profile: null,
+        session: action.session,
+        status: "loading",
+        user: action.session.user
+      };
+    case "profileLoaded":
+      return {
+        profile: action.profile,
+        session: action.session,
+        status: "authenticated",
+        user: action.session.user
+      };
+    case "accessDenied":
+      return {
+        error: action.message,
+        profile: null,
+        session: action.session,
+        status: "blocked",
+        user: action.session.user
+      };
     case "authFailed":
       return {
         error: action.message,
+        profile: null,
         session: null,
         status: "unauthenticated",
         user: null
@@ -57,6 +89,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
     case "unconfigured":
       return {
         error: action.message,
+        profile: null,
         session: null,
         status: "unconfigured",
         user: null
@@ -66,9 +99,40 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
   }
 }
 
-function applySession(dispatch: Dispatch<AuthAction>, session: Session | null) {
+async function applySession(dispatch: Dispatch<AuthAction>, session: Session | null, isActive = () => true) {
   setCurrentAuthSession(session);
-  dispatch({ session, type: "sessionChanged" });
+  if (!session) {
+    if (isActive()) {
+      dispatch({ session, type: "sessionChanged" });
+    }
+    return;
+  }
+
+  if (isActive()) {
+    dispatch({ session, type: "sessionLoading" });
+  }
+
+  try {
+    const profile = await api.me();
+    if (isActive()) {
+      dispatch({ profile, session, type: "profileLoaded" });
+    }
+  } catch (error) {
+    if (!isActive()) {
+      return;
+    }
+
+    if (error instanceof ApiClientError && error.status === 401) {
+      applyAuthFailure(dispatch, error.message);
+      return;
+    }
+
+    dispatch({
+      message: error instanceof Error ? error.message : "Access not granted",
+      session,
+      type: "accessDenied"
+    });
+  }
 }
 
 function applyAuthFailure(dispatch: Dispatch<AuthAction>, message: string) {
@@ -105,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        applySession(dispatch, data.session);
+        void applySession(dispatch, data.session, () => active);
       })
       .catch((error: unknown) => {
         if (!active) {
@@ -119,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (active) {
-        applySession(dispatch, session);
+        void applySession(dispatch, session, () => active);
       }
     });
 
@@ -138,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw error;
     }
 
-    applySession(dispatch, data.session);
+    await applySession(dispatch, data.session);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -150,12 +214,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw error;
     }
 
-    applySession(dispatch, null);
+    await applySession(dispatch, null);
   }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       ...authState,
+      hasPermission: (permission) => authState.profile?.permissions.includes(permission) ?? false,
       signIn,
       signOut
     }),

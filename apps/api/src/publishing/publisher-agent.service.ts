@@ -1,7 +1,9 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { PostDraft, PublishedPost, PublishOptions } from "@auto-fb/shared";
+import { approvalStatuses, draftStatuses, publishStatuses, type PostDraft, type PublishedPost, type PublishOptions } from "@auto-fb/shared";
+import { appDefaults, envKeys } from "../common/app.constants.js";
 import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
+import { publishingDefaults } from "./publishing.constants.js";
 
 type PublishPayload = {
   pageId: string;
@@ -20,7 +22,7 @@ export class PublisherAgentService {
 
   async publishDraft(draftId: string, options: PublishOptions = {}): Promise<PublishedPost> {
     const draft = await this.db.getDraft(draftId);
-    if (draft.approvalStatus !== "APPROVED") {
+    if (draft.approvalStatus !== approvalStatuses.approved) {
       throw new BadRequestException("Draft must be approved before publish");
     }
 
@@ -33,25 +35,25 @@ export class PublisherAgentService {
       ...(draft.imageAsset?.publicUrl ? { imageUrl: draft.imageAsset.publicUrl } : {})
     };
 
-    const dryRun = options.dryRun ?? this.config.get<string>("PUBLISH_DRY_RUN", "true") !== "false";
+    const dryRun = options.dryRun ?? this.config.get<string>(envKeys.publishDryRun, appDefaults.publishDryRun) !== "false";
 
     try {
-      const facebookPostId = dryRun ? `dry_run_${draft.id}` : await this.publishToMeta(payload, draft);
+      const facebookPostId = dryRun ? `${publishingDefaults.dryRunPostIdPrefix}${draft.id}` : await this.publishToMeta(payload, draft);
       const post = await this.db.createPublishedPost({
         postDraftId: draft.id,
         facebookPageId: campaign.targetPageId,
         facebookPostId,
-        status: dryRun ? "DRY_RUN_PUBLISHED" : "PUBLISHED",
+        status: dryRun ? publishStatuses.dryRunPublished : publishStatuses.published,
         publishPayload: payload,
         publishedAt: new Date().toISOString()
       });
-      await this.db.updateDraftStatus(draft.id, "PUBLISHED", "APPROVED");
+      await this.db.updateDraftStatus(draft.id, draftStatuses.published, approvalStatuses.approved);
       return post;
     } catch (error) {
       return this.db.createPublishedPost({
         postDraftId: draft.id,
         facebookPageId: campaign.targetPageId,
-        status: "FAILED",
+        status: publishStatuses.failed,
         publishPayload: payload,
         errorMessage: error instanceof Error ? error.message : String(error)
       });
@@ -59,12 +61,12 @@ export class PublisherAgentService {
   }
 
   private async publishToMeta(payload: PublishPayload, draft: PostDraft): Promise<string> {
-    const token = this.config.get<string>("META_PAGE_ACCESS_TOKEN");
-    if (!token) throw new Error("Missing META_PAGE_ACCESS_TOKEN");
+    const token = this.config.get<string>(envKeys.metaPageAccessToken);
+    if (!token) throw new Error(`Missing ${envKeys.metaPageAccessToken}`);
     if (!payload.pageId) throw new Error("Missing campaign target Page ID");
-    if (draft.imageAssetId && !payload.imageUrl) throw new Error("Image draft requires R2_PUBLIC_BASE_URL");
+    if (draft.imageAssetId && !payload.imageUrl) throw new Error(`Image draft requires ${envKeys.r2PublicBaseUrl}`);
 
-    const version = this.config.get<string>("META_GRAPH_API_VERSION", "v20.0");
+    const version = this.config.get<string>(envKeys.metaGraphApiVersion, appDefaults.metaGraphApiVersion);
     const endpoint = payload.imageUrl
       ? `https://graph.facebook.com/${version}/${payload.pageId}/photos`
       : `https://graph.facebook.com/${version}/${payload.pageId}/feed`;

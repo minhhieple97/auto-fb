@@ -1,4 +1,5 @@
-import type { Source } from "@auto-fb/shared";
+import { sourceTypes, type Source } from "@auto-fb/shared";
+import { collectorLimits } from "./collector.constants.js";
 import type { RawContentItem, SourceAdapter } from "./content-source.types.js";
 
 type ApiRecord = {
@@ -17,7 +18,7 @@ type ApiRecord = {
 
 export class ApiAdapter implements SourceAdapter {
   supports(source: Source): boolean {
-    return source.type === "api";
+    return source.type === sourceTypes.api;
   }
 
   async collect(source: Source): Promise<RawContentItem[]> {
@@ -29,7 +30,7 @@ export class ApiAdapter implements SourceAdapter {
     const payload = (await response.json()) as ApiRecord[] | { items?: ApiRecord[]; data?: ApiRecord[] };
     const records = Array.isArray(payload) ? payload : payload.items ?? payload.data ?? [];
 
-    return records.slice(0, 10).map((record) => ({
+    return records.slice(0, collectorLimits.maxItemsPerSource).map((record) => ({
       sourceId: source.id,
       sourceUrl: record.url ?? record.link ?? source.url,
       title: record.title ?? "Untitled API item",

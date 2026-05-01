@@ -1,8 +1,12 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { adminPermissions } from "@auto-fb/shared";
 import { useNavigate } from "react-router-dom";
 import { useAdminStore } from "../../app/admin.store.js";
+import { useAuth } from "../../app/auth-provider.js";
+import { queryKeys } from "../../app/query-keys.js";
 import { invalidateDashboardData } from "../../app/query-invalidation.js";
+import { adminRoutes } from "../../app/routes.js";
 import { AgentTimeline } from "../agent-runs/agent-timeline.js";
 import { CampaignPanel } from "../campaigns/campaign-panel.js";
 import { DraftInbox } from "../drafts/draft-inbox.js";
@@ -14,21 +18,22 @@ import { api } from "../../lib/api-client.js";
 export function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
   const selectedCampaignId = useAdminStore((state) => state.selectedCampaignId);
   const setSelectedCampaignId = useAdminStore((state) => state.setSelectedCampaignId);
-  const campaigns = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
+  const campaigns = useQuery({ queryKey: queryKeys.campaigns, queryFn: api.campaigns });
   const sources = useQuery({
-    queryKey: ["sources", selectedCampaignId],
+    queryKey: queryKeys.sources(selectedCampaignId),
     queryFn: () => api.sources(selectedCampaignId!),
     enabled: Boolean(selectedCampaignId)
   });
-  const drafts = useQuery({ queryKey: ["drafts"], queryFn: api.drafts });
+  const drafts = useQuery({ queryKey: queryKeys.drafts, queryFn: api.drafts });
   const agentRuns = useQuery({
-    queryKey: ["agent-runs", selectedCampaignId],
-    queryFn: () => api.agentRuns({ campaignId: selectedCampaignId }),
+    queryKey: queryKeys.agentRuns(selectedCampaignId),
+    queryFn: () => api.agentRuns(selectedCampaignId ? { campaignId: selectedCampaignId } : {}),
     enabled: Boolean(selectedCampaignId)
   });
-  const publishedPosts = useQuery({ queryKey: ["published-posts"], queryFn: api.publishedPosts });
+  const publishedPosts = useQuery({ queryKey: queryKeys.publishedPosts, queryFn: api.publishedPosts });
 
   useEffect(() => {
     if (!selectedCampaignId && campaigns.data?.[0]) {
@@ -37,18 +42,27 @@ export function DashboardPage() {
   }, [campaigns.data, selectedCampaignId, setSelectedCampaignId]);
 
   const refreshDashboard = () => invalidateDashboardData(queryClient);
+  const canManageCampaigns = hasPermission(adminPermissions.manageCampaigns);
+  const canManageSources = hasPermission(adminPermissions.manageSources);
+  const canRunWorkflow = hasPermission(adminPermissions.runWorkflow);
+  const canReviewDrafts = hasPermission(adminPermissions.reviewDrafts);
 
   return (
     <div className="mx-auto grid max-w-7xl gap-4 px-6 py-6 lg:grid-cols-[360px_1fr]">
       <aside className="space-y-4">
-        <CampaignPanel selectedCampaignId={selectedCampaignId} onSelect={setSelectedCampaignId} onCreated={setSelectedCampaignId} />
-        <SourcePanel campaignId={selectedCampaignId} sources={sources.data ?? []} />
+        <CampaignPanel
+          canCreate={canManageCampaigns}
+          selectedCampaignId={selectedCampaignId}
+          onSelect={setSelectedCampaignId}
+          onCreated={setSelectedCampaignId}
+        />
+        <SourcePanel canCreate={canManageSources} campaignId={selectedCampaignId} sources={sources.data ?? []} />
       </aside>
 
       <section className="space-y-4">
-        <CampaignRunPanel campaignId={selectedCampaignId} />
-        <DraftInbox drafts={drafts.data ?? []} onChanged={refreshDashboard} />
-        <AgentTimeline runs={agentRuns.data ?? []} onOpenDetails={() => navigate("/agent-runs")} />
+        <CampaignRunPanel canRun={canRunWorkflow} campaignId={selectedCampaignId} />
+        <DraftInbox canReview={canReviewDrafts} drafts={drafts.data ?? []} onChanged={refreshDashboard} />
+        <AgentTimeline runs={agentRuns.data ?? []} onOpenDetails={() => navigate(adminRoutes.agentRuns)} />
         <PublishedHistory posts={publishedPosts.data ?? []} />
       </section>
     </div>

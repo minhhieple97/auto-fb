@@ -1,10 +1,11 @@
 import * as cheerio from "cheerio";
-import type { Source } from "@auto-fb/shared";
+import { sourceTypes, type Source } from "@auto-fb/shared";
+import { collectorLimits } from "./collector.constants.js";
 import type { RawContentItem, SourceAdapter } from "./content-source.types.js";
 
 export class StaticHtmlAdapter implements SourceAdapter {
   supports(source: Source): boolean {
-    return source.type === "static_html";
+    return source.type === sourceTypes.staticHtml;
   }
 
   async collect(source: Source): Promise<RawContentItem[]> {
@@ -28,7 +29,7 @@ export class StaticHtmlAdapter implements SourceAdapter {
         sourceId: source.id,
         sourceUrl: source.url,
         title: title.trim(),
-        text: description.replace(/\s+/g, " ").trim().slice(0, 5000),
+        text: description.replace(/\s+/g, " ").trim().slice(0, collectorLimits.staticHtmlTextPreviewCharacters),
         images: image ? [new URL(image, source.url).toString()] : [],
         crawlTimestamp: new Date().toISOString()
       }

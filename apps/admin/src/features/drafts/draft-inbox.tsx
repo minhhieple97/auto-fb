@@ -1,21 +1,23 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PostDraft } from "@auto-fb/shared";
 import { Check, Trash2 } from "lucide-react";
+import { queryKeys } from "../../app/query-keys.js";
 import { api } from "../../lib/api-client.js";
 
 type DraftInboxProps = {
+  canReview?: boolean;
   drafts: PostDraft[];
   onChanged: () => Promise<void>;
 };
 
-export function DraftInbox({ drafts, onChanged }: DraftInboxProps) {
+export function DraftInbox({ canReview = true, drafts, onChanged }: DraftInboxProps) {
   const queryClient = useQueryClient();
   const approve = useMutation({
     mutationFn: api.approveDraft,
     onSuccess: () =>
       Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["drafts"] }),
-        queryClient.invalidateQueries({ queryKey: ["published-posts"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.publishedPosts }),
         onChanged()
       ])
   });
@@ -23,8 +25,8 @@ export function DraftInbox({ drafts, onChanged }: DraftInboxProps) {
     mutationFn: api.rejectDraft,
     onSuccess: () =>
       Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["drafts"] }),
-        queryClient.invalidateQueries({ queryKey: ["published-posts"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.publishedPosts }),
         onChanged()
       ])
   });
@@ -58,16 +60,18 @@ export function DraftInbox({ drafts, onChanged }: DraftInboxProps) {
                 </span>
               ))}
             </div>
-            <div className="flex gap-2">
-              <button className="button bg-action text-white" onClick={() => approve.mutate(draft.id)} title="Approve and publish dry run">
-                <Check size={16} />
-                Approve
-              </button>
-              <button className="button border border-line bg-white text-ink" onClick={() => reject.mutate(draft.id)} title="Reject">
-                <Trash2 size={16} />
-                Reject
-              </button>
-            </div>
+            {canReview ? (
+              <div className="flex gap-2">
+                <button className="button bg-action text-white" onClick={() => approve.mutate(draft.id)} title="Approve and publish dry run">
+                  <Check size={16} />
+                  Approve
+                </button>
+                <button className="button border border-line bg-white text-ink" onClick={() => reject.mutate(draft.id)} title="Reject">
+                  <Trash2 size={16} />
+                  Reject
+                </button>
+              </div>
+            ) : null}
           </article>
         ))}
       </div>

@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { randomUUID } from "node:crypto";
-import type { AgentRun } from "@auto-fb/shared";
+import { agentRunStatuses, agentWorkflowNodes, type AgentRun, type AgentWorkflowNodeName } from "@auto-fb/shared";
 import { ApprovalGateAgent } from "../agents/approval-gate.agent.js";
 import type { WorkflowState } from "../agents/agent.types.js";
 import { CollectorAgent } from "../agents/collector.agent.js";
@@ -51,41 +51,41 @@ export class MultiAgentWorkflow {
   async run(campaignId: string, options: WorkflowRunOptions = {}): Promise<WorkflowState> {
     const graphRunId = options.graphRunId ?? randomUUID();
     const graph = new StateGraph(WorkflowAnnotation)
-      .addNode("load_campaign", (state) =>
-        this.runNode("load_campaign", state, options, async () => ({
+      .addNode(agentWorkflowNodes.loadCampaign, (state) =>
+        this.runNode(agentWorkflowNodes.loadCampaign, state, options, async () => ({
           campaign: await this.db.getCampaign(state.campaignId)
         }))
       )
-      .addNode("discover_sources", (state) =>
-        this.runNode("discover_sources", state, options, async () => ({
+      .addNode(agentWorkflowNodes.discoverSources, (state) =>
+        this.runNode(agentWorkflowNodes.discoverSources, state, options, async () => ({
           sources: await this.sourceDiscoveryAgent.discover(state.campaignId)
         }))
       )
-      .addNode("collect_content", (state) =>
-        this.runNode("collect_content", state, options, async () => ({
+      .addNode(agentWorkflowNodes.collectContent, (state) =>
+        this.runNode(agentWorkflowNodes.collectContent, state, options, async () => ({
           rawItems: await this.collectorAgent.collect(required(state.sources, "sources"))
         }))
       )
-      .addNode("understand_content", (state) =>
-        this.runNode("understand_content", state, options, async () => ({
+      .addNode(agentWorkflowNodes.understandContent, (state) =>
+        this.runNode(agentWorkflowNodes.understandContent, state, options, async () => ({
           understood: await this.understandingAgent.understand(
             required(state.campaign, "campaign"),
             required(state.rawItems, "rawItems")
           )
         }))
       )
-      .addNode("generate_post", (state) =>
-        this.runNode("generate_post", state, options, async () => ({
+      .addNode(agentWorkflowNodes.generatePost, (state) =>
+        this.runNode(agentWorkflowNodes.generatePost, state, options, async () => ({
           draftText: await this.copywritingAgent.write(required(state.campaign, "campaign"), required(state.understood, "understood"))
         }))
       )
-      .addNode("prepare_image", (state) =>
-        this.runNode("prepare_image", state, options, async () => ({
+      .addNode(agentWorkflowNodes.prepareImage, (state) =>
+        this.runNode(agentWorkflowNodes.prepareImage, state, options, async () => ({
           imageAsset: await this.imageAgent.prepare(required(state.campaign, "campaign"), required(state.understood, "understood"))
         }))
       )
-      .addNode("qa_check", (state) =>
-        this.runNode("qa_check", state, options, async () => ({
+      .addNode(agentWorkflowNodes.qaCheck, (state) =>
+        this.runNode(agentWorkflowNodes.qaCheck, state, options, async () => ({
           qa: await this.qaComplianceAgent.check({
             understood: required(state.understood, "understood"),
             draftText: required(state.draftText, "draftText"),
@@ -93,8 +93,8 @@ export class MultiAgentWorkflow {
           })
         }))
       )
-      .addNode("save_pending_approval", (state) =>
-        this.runNode("save_pending_approval", state, options, async () => ({
+      .addNode(agentWorkflowNodes.savePendingApproval, (state) =>
+        this.runNode(agentWorkflowNodes.savePendingApproval, state, options, async () => ({
           draft: await this.approvalGateAgent.save({
             campaign: required(state.campaign, "campaign"),
             understood: required(state.understood, "understood"),
@@ -104,15 +104,15 @@ export class MultiAgentWorkflow {
           })
         }))
       )
-      .addEdge(START, "load_campaign")
-      .addEdge("load_campaign", "discover_sources")
-      .addEdge("discover_sources", "collect_content")
-      .addEdge("collect_content", "understand_content")
-      .addEdge("understand_content", "generate_post")
-      .addEdge("generate_post", "prepare_image")
-      .addEdge("prepare_image", "qa_check")
-      .addEdge("qa_check", "save_pending_approval")
-      .addEdge("save_pending_approval", END)
+      .addEdge(START, agentWorkflowNodes.loadCampaign)
+      .addEdge(agentWorkflowNodes.loadCampaign, agentWorkflowNodes.discoverSources)
+      .addEdge(agentWorkflowNodes.discoverSources, agentWorkflowNodes.collectContent)
+      .addEdge(agentWorkflowNodes.collectContent, agentWorkflowNodes.understandContent)
+      .addEdge(agentWorkflowNodes.understandContent, agentWorkflowNodes.generatePost)
+      .addEdge(agentWorkflowNodes.generatePost, agentWorkflowNodes.prepareImage)
+      .addEdge(agentWorkflowNodes.prepareImage, agentWorkflowNodes.qaCheck)
+      .addEdge(agentWorkflowNodes.qaCheck, agentWorkflowNodes.savePendingApproval)
+      .addEdge(agentWorkflowNodes.savePendingApproval, END)
       .compile();
 
     return graph.invoke({
@@ -130,7 +130,7 @@ export class MultiAgentWorkflow {
   }
 
   private async runNode(
-    nodeName: string,
+    nodeName: AgentWorkflowNodeName,
     state: WorkflowState,
     options: WorkflowRunOptions,
     handler: () => Promise<Partial<WorkflowState>> | Partial<WorkflowState>
@@ -142,7 +142,7 @@ export class MultiAgentWorkflow {
       nodeName,
       inputJson: safeJson(state),
       outputJson: {},
-      status: "RUNNING",
+      status: agentRunStatuses.running,
       startedAt
     });
     await options.onStepStarted?.(run);
@@ -151,7 +151,7 @@ export class MultiAgentWorkflow {
       const output = await handler();
       const completedRun = await this.db.updateAgentRun(run.id, {
         outputJson: safeJson(output),
-        status: "SUCCESS",
+        status: agentRunStatuses.success,
         completedAt: nowIso()
       });
       await options.onStepCompleted?.(completedRun);
@@ -159,7 +159,7 @@ export class MultiAgentWorkflow {
     } catch (error) {
       const failedRun = await this.db.updateAgentRun(run.id, {
         outputJson: {},
-        status: "FAILED",
+        status: agentRunStatuses.failed,
         errorMessage: error instanceof Error ? error.message : String(error),
         completedAt: nowIso()
       });

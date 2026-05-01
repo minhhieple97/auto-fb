@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { LlmProvider } from "@auto-fb/shared";
+import { llmProviders, type LlmProvider } from "@auto-fb/shared";
+import { envKeys, nodeEnvironments } from "../common/app.constants.js";
 import { HttpLlmClient } from "./http-llm.client.js";
 import type { GeneratePostInput, GeneratePostResult, LlmClient } from "./llm.types.js";
 import { MockLlmClient } from "./mock-llm.client.js";
@@ -20,11 +21,11 @@ export class LlmService {
   }
 
   createClient(provider: LlmProvider): LlmClient {
-    if (provider === "mock") return new MockLlmClient();
+    if (provider === llmProviders.mock) return new MockLlmClient();
     const definition = getProviderDefinition(provider);
     const apiKey = definition.envKey ? this.config.get<string>(definition.envKey) : undefined;
     if (!apiKey) {
-      if (this.config.get<string>("NODE_ENV") === "production") {
+      if (this.config.get<string>(envKeys.nodeEnv) === nodeEnvironments.production) {
         throw new Error(`Missing ${definition.envKey} for ${provider}`);
       }
       return new MockLlmClient();

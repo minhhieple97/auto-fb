@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../app/auth-provider.js";
 import { invalidateRouteData } from "../../app/query-invalidation.js";
+import { adminRoutes } from "../../app/routes.js";
 
 export function AdminHeader() {
   const queryClient = useQueryClient();
   const location = useLocation();
-  const { signOut, user } = useAuth();
+  const { profile, signOut, user } = useAuth();
 
   const refreshRoute = () => invalidateRouteData(queryClient, location.pathname);
 
@@ -26,14 +27,19 @@ export function AdminHeader() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <nav className="flex rounded-md border border-line bg-slate-50 p-1" aria-label="Admin navigation">
-            <NavButton to="/" end icon={<LayoutDashboard size={16} />}>
+            <NavButton to={adminRoutes.dashboard} end icon={<LayoutDashboard size={16} />}>
               Dashboard
             </NavButton>
-            <NavButton to="/agent-runs" icon={<Bot size={16} />}>
+            <NavButton to={adminRoutes.agentRuns} icon={<Bot size={16} />}>
               Agent runs
             </NavButton>
           </nav>
-          {user?.email ? <span className="hidden text-sm text-slate-600 sm:inline">{user.email}</span> : null}
+          {profile?.email ?? user?.email ? (
+            <div className="hidden text-right text-sm sm:block">
+              <div className="text-slate-700">{profile?.email ?? user?.email}</div>
+              {profile?.role ? <div className="text-xs font-semibold uppercase text-slate-500">{profile.role}</div> : null}
+            </div>
+          ) : null}
           <button className="button border border-line bg-white text-ink" onClick={refreshRoute} title="Refresh">
             <RefreshCw size={16} />
             Refresh

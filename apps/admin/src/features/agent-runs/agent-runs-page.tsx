@@ -2,25 +2,29 @@ import { useEffect, useMemo, useReducer } from "react";
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AgentRun, AgentWorkflowRunDetail } from "@auto-fb/shared";
-import { agentWorkflowNodeNames } from "@auto-fb/shared";
+import { adminPermissions, agentRunStatuses, agentWorkflowNodeNames, agentWorkflowRunStatuses, workflowRunListLimits } from "@auto-fb/shared";
 import { AlertTriangle, Bot, CheckCircle2, Clock3, LoaderCircle, XCircle } from "lucide-react";
 import { useAdminStore } from "../../app/admin.store.js";
+import { useAuth } from "../../app/auth-provider.js";
+import { queryKeys } from "../../app/query-keys.js";
 import { api } from "../../lib/api-client.js";
 import { CampaignRunPanel } from "../workflow/campaign-run-panel.js";
+import { agentRunsDisplay } from "./agent-runs.constants.js";
 
 const stepOrder = new Map<string, number>(agentWorkflowNodeNames.map((name, index) => [name, index]));
 
 export function AgentRunsPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
   const selectedCampaignId = useAdminStore((state) => state.selectedCampaignId);
   const setSelectedCampaignId = useAdminStore((state) => state.setSelectedCampaignId);
   const [{ selectedGraphRunId, selectedStepId, streamError }, dispatch] = useReducer(agentRunsPageReducer, initialAgentRunsPageState);
-  const workflowQueryKey = useMemo(() => ["agent-workflow-runs", selectedCampaignId ?? "all"] as const, [selectedCampaignId]);
+  const workflowQueryKey = useMemo(() => queryKeys.agentWorkflowRuns(selectedCampaignId), [selectedCampaignId]);
 
-  const campaigns = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
+  const campaigns = useQuery({ queryKey: queryKeys.campaigns, queryFn: api.campaigns });
   const workflowRuns = useQuery({
     queryKey: workflowQueryKey,
-    queryFn: () => api.agentWorkflowRuns({ ...(selectedCampaignId ? { campaignId: selectedCampaignId } : {}), limit: 50 })
+    queryFn: () => api.agentWorkflowRuns({ ...(selectedCampaignId ? { campaignId: selectedCampaignId } : {}), limit: workflowRunListLimits.default })
   });
 
   useEffect(() => {
@@ -37,7 +41,7 @@ export function AgentRunsPage() {
   const orderedSteps = useMemo(() => orderSteps(selectedRun?.steps ?? []), [selectedRun?.steps]);
 
   useEffect(() => {
-    const preferredStep = orderedSteps.find((step) => step.status === "RUNNING") ?? orderedSteps[0];
+    const preferredStep = orderedSteps.find((step) => step.status === agentRunStatuses.running) ?? orderedSteps[0];
     if (!selectedStepId && preferredStep) {
       dispatch({ stepId: preferredStep.id, type: "selectStep" });
     }
@@ -48,6 +52,7 @@ export function AgentRunsPage() {
 
   const selectedStep = orderedSteps.find((step) => step.id === selectedStepId);
   const counters = useMemo(() => summarizeRuns(workflowRuns.data ?? []), [workflowRuns.data]);
+  const canRunWorkflow = hasPermission(adminPermissions.runWorkflow);
 
   useEffect(() => {
     dispatch({ type: "streamStarted" });
@@ -55,7 +60,7 @@ export function AgentRunsPage() {
       ...(selectedCampaignId ? { campaignId: selectedCampaignId } : {}),
       onEvent: (event) => {
         queryClient.setQueryData<AgentWorkflowRunDetail[]>(workflowQueryKey, (current = []) => upsertWorkflowRun(current, event.run));
-        queryClient.invalidateQueries({ queryKey: ["agent-runs"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.agentRunsRoot });
         dispatch({ graphRunId: event.run.graphRunId, type: "streamEvent" });
       },
       onError: (error) => dispatch({ message: error.message, type: "streamFailed" })
@@ -89,6 +94,7 @@ export function AgentRunsPage() {
         </section>
 
         <CampaignRunPanel
+          canRun={canRunWorkflow}
           campaignId={selectedCampaignId}
           onRunCreated={(run) => {
             queryClient.setQueryData<AgentWorkflowRunDetail[]>(workflowQueryKey, (current = []) => upsertWorkflowRun(current, run));
@@ -121,7 +127,7 @@ export function AgentRunsPage() {
                 type="button"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{run.currentNodeName ?? run.graphRunId.slice(0, 8)}</span>
+                  <span className="font-medium">{run.currentNodeName ?? run.graphRunId.slice(0, agentRunsDisplay.graphRunIdPreviewLength)}</span>
                   <StatusPill status={run.status} />
                 </div>
                 <div className="mt-1 text-xs text-slate-600">{run.triggeredByEmail ?? run.triggeredByUserId}</div>
@@ -308,11 +314,11 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
 
 function StatusPill({ status }: { status: string }) {
   const className =
-    status === "SUCCESS"
+    status === agentRunStatuses.success
       ? "bg-emerald-100 text-emerald-800"
-      : status === "FAILED"
+      : status === agentRunStatuses.failed
         ? "bg-red-100 text-red-800"
-        : status === "RUNNING"
+        : status === agentRunStatuses.running
           ? "bg-blue-100 text-blue-800"
           : "bg-slate-100 text-slate-700";
   return <span className={`rounded px-2 py-1 text-xs font-semibold ${className}`}>{status}</span>;
@@ -331,9 +337,9 @@ function orderSteps(steps: AgentRun[]): AgentRun[] {
 function summarizeRuns(runs: AgentWorkflowRunDetail[]) {
   return {
     total: runs.length,
-    running: runs.filter((run) => run.status === "QUEUED" || run.status === "RUNNING").length,
-    success: runs.filter((run) => run.status === "SUCCESS").length,
-    failed: runs.filter((run) => run.status === "FAILED").length
+    running: runs.filter((run) => run.status === agentWorkflowRunStatuses.queued || run.status === agentWorkflowRunStatuses.running).length,
+    success: runs.filter((run) => run.status === agentWorkflowRunStatuses.success).length,
+    failed: runs.filter((run) => run.status === agentWorkflowRunStatuses.failed).length
   };
 }
 
@@ -354,8 +360,8 @@ function formatDuration(startedAt: string | undefined, finishedAt: string | unde
   if (!startedAt) return "Not started";
   if (!finishedAt) return "In progress";
   const diffMs = Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt));
-  const seconds = Math.round(diffMs / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}m ${seconds % 60}s`;
+  const seconds = Math.round(diffMs / agentRunsDisplay.millisecondsPerSecond);
+  if (seconds < agentRunsDisplay.secondsPerMinute) return `${seconds}s`;
+  const minutes = Math.floor(seconds / agentRunsDisplay.secondsPerMinute);
+  return `${minutes}m ${seconds % agentRunsDisplay.secondsPerMinute}s`;
 }

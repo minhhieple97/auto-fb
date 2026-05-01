@@ -1,5 +1,5 @@
 import { Injectable, type MessageEvent } from "@nestjs/common";
-import type { AgentWorkflowRunDetail, AgentWorkflowRunEvent } from "@auto-fb/shared";
+import { agentWorkflowRunEventTypes, type AgentWorkflowRunDetail, type AgentWorkflowRunEvent } from "@auto-fb/shared";
 import { Observable, Subject } from "rxjs";
 
 @Injectable()
@@ -7,7 +7,7 @@ export class AgentWorkflowEventsService {
   private readonly events = new Subject<AgentWorkflowRunEvent>();
 
   emit(run: AgentWorkflowRunDetail): void {
-    this.events.next({ type: "workflow_run_updated", run });
+    this.events.next({ type: agentWorkflowRunEventTypes.workflowRunUpdated, run });
   }
 
   stream(campaignId?: string): Observable<MessageEvent> {

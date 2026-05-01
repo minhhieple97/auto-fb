@@ -1,7 +1,10 @@
 import type {
   AgentRun,
+  AgentRunFilters,
   AgentWorkflowRunDetail,
+  AgentWorkflowRunFilters,
   AgentWorkflowRunStatus,
+  AdminProfile,
   ApprovalStatus,
   Campaign,
   ContentItem,
@@ -33,18 +36,11 @@ export type UpdateAgentWorkflowRunInput = Partial<{
   startedAt: string;
   finishedAt: string;
 }>;
-export type AgentRunFilters = {
-  campaignId?: string;
-  graphRunId?: string;
-};
-export type AgentWorkflowRunFilters = {
-  campaignId?: string;
-  status?: AgentWorkflowRunStatus;
-  limit?: number;
-};
 export type CreatePublishedPostInput = Omit<PublishedPost, "id" | "createdAt">;
 
 export interface DatabaseRepository {
+  getAdminProfileForAuthUser(authUserId: string, email?: string): Awaitable<AdminProfile | undefined>;
+
   createCampaign(input: CreateCampaignInput): Awaitable<Campaign>;
   listCampaigns(): Awaitable<Campaign[]>;
   getCampaign(id: string): Awaitable<Campaign>;

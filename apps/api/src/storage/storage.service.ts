@@ -3,7 +3,9 @@ import { ConfigService } from "@nestjs/config";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { ImageAsset } from "@auto-fb/shared";
 import { randomUUID } from "node:crypto";
+import { appDefaults, envKeys } from "../common/app.constants.js";
 import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
+import { storageDefaults } from "./storage.constants.js";
 
 type UploadImageInput = {
   campaignId: string;
@@ -23,20 +25,20 @@ export class StorageService {
       throw new Error(`Image source ${input.sourceUrl} returned ${response.status}`);
     }
 
-    const mimeType = response.headers.get("content-type") ?? "application/octet-stream";
-    if (!mimeType.startsWith("image/")) {
+    const mimeType = response.headers.get("content-type") ?? storageDefaults.octetStreamMimeType;
+    if (!mimeType.startsWith(storageDefaults.imageMimePrefix)) {
       throw new Error(`Unsupported image mime type ${mimeType}`);
     }
 
     const body = Buffer.from(await response.arrayBuffer());
-    const extension = mimeType.split("/")[1]?.split(";")[0] ?? "bin";
-    const key = `campaigns/${input.campaignId}/${randomUUID()}.${extension}`;
+    const extension = mimeType.split("/")[1]?.split(";")[0] ?? storageDefaults.binaryExtension;
+    const key = `${storageDefaults.objectKeyRoot}/${input.campaignId}/${randomUUID()}.${extension}`;
     const publicUrl = this.publicUrlForKey(key);
 
     if (this.hasR2Config()) {
       await this.client().send(
         new PutObjectCommand({
-          Bucket: this.config.get<string>("R2_BUCKET") ?? "auto-fb-assets",
+          Bucket: this.config.get<string>(envKeys.r2Bucket) ?? appDefaults.r2Bucket,
           Key: key,
           Body: body,
           ContentType: mimeType
@@ -54,29 +56,29 @@ export class StorageService {
   }
 
   publicUrlForKey(key: string): string | undefined {
-    const baseUrl = this.config.get<string>("R2_PUBLIC_BASE_URL");
+    const baseUrl = this.config.get<string>(envKeys.r2PublicBaseUrl);
     if (!baseUrl) return undefined;
     return `${baseUrl.replace(/\/$/, "")}/${key}`;
   }
 
   private client(): S3Client {
-    const accountId = this.config.getOrThrow<string>("R2_ACCOUNT_ID");
+    const accountId = this.config.getOrThrow<string>(envKeys.r2AccountId);
     return new S3Client({
-      region: "auto",
+      region: appDefaults.r2Region,
       endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
       credentials: {
-        accessKeyId: this.config.getOrThrow<string>("R2_ACCESS_KEY_ID"),
-        secretAccessKey: this.config.getOrThrow<string>("R2_SECRET_ACCESS_KEY")
+        accessKeyId: this.config.getOrThrow<string>(envKeys.r2AccessKeyId),
+        secretAccessKey: this.config.getOrThrow<string>(envKeys.r2SecretAccessKey)
       }
     });
   }
 
   private hasR2Config(): boolean {
     return Boolean(
-      this.config.get<string>("R2_ACCOUNT_ID") &&
-        this.config.get<string>("R2_ACCESS_KEY_ID") &&
-        this.config.get<string>("R2_SECRET_ACCESS_KEY") &&
-        this.config.get<string>("R2_BUCKET")
+      this.config.get<string>(envKeys.r2AccountId) &&
+        this.config.get<string>(envKeys.r2AccessKeyId) &&
+        this.config.get<string>(envKeys.r2SecretAccessKey) &&
+        this.config.get<string>(envKeys.r2Bucket)
     );
   }
 }

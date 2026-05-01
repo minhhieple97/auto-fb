@@ -71,4 +71,11 @@ describe("SourcePanel", () => {
     expect(await screen.findByText("Enter a valid source URL.")).toBeInTheDocument();
     expect(createSource).not.toHaveBeenCalled();
   });
+
+  it("does not expose source creation controls without permission", () => {
+    renderWithClient(<SourcePanel canCreate={false} campaignId="campaign-1" sources={[source()]} />);
+
+    expect(screen.getByText("https://example.com/feed.xml")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add source/i })).not.toBeInTheDocument();
+  });
 });

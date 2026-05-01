@@ -1,8 +1,10 @@
+import { llmProviderModels, llmProviders } from "@auto-fb/shared";
+import { llmDefaults } from "./llm.constants.js";
 import type { GeneratePostInput, GeneratePostResult, LlmClient } from "./llm.types.js";
 
 export class MockLlmClient implements LlmClient {
   async generatePost(input: GeneratePostInput): Promise<GeneratePostResult> {
-    const facts = input.keyFacts.slice(0, 3).map((fact) => `- ${fact}`).join("\n");
+    const facts = input.keyFacts.slice(0, llmDefaults.maxKeyFactsInMockPost).map((fact) => `- ${fact}`).join("\n");
     const text = [
       `Goc nhin nhanh ve ${input.topic}`,
       "",
@@ -17,8 +19,8 @@ export class MockLlmClient implements LlmClient {
 
     return {
       text,
-      provider: "mock",
-      model: "mock-copywriter-v1"
+      provider: llmProviders.mock,
+      model: llmProviderModels.mock[0]
     };
   }
 }

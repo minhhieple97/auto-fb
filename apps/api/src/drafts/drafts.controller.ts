@@ -1,10 +1,21 @@
 import { Body, Controller, Get, Inject, Param, Post, Query } from "@nestjs/common";
-import { draftStatusSchema, publishOptionsSchema, type DraftStatus, type PublishOptions } from "@auto-fb/shared";
+import {
+  adminPermissions,
+  approvalStatuses,
+  draftStatuses,
+  draftStatusSchema,
+  publishOptionsSchema,
+  type DraftStatus,
+  type PublishOptions
+} from "@auto-fb/shared";
+import { RequirePermissions } from "../auth/permissions.decorator.js";
+import { apiRoutes } from "../common/api-routes.js";
 import { ZodValidationPipe } from "../common/zod-validation.pipe.js";
 import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 import { PublisherAgentService } from "../publishing/publisher-agent.service.js";
 
-@Controller("drafts")
+@RequirePermissions(adminPermissions.readDashboardData)
+@Controller(apiRoutes.drafts)
 export class DraftsController {
   constructor(
     @Inject(DATABASE_REPOSITORY) private readonly db: DatabaseRepository,
@@ -17,14 +28,16 @@ export class DraftsController {
     return this.db.listDrafts(parsedStatus);
   }
 
-  @Post(":id/approve")
+  @Post(apiRoutes.draftApprove)
+  @RequirePermissions(adminPermissions.reviewDrafts, adminPermissions.publishDrafts)
   async approve(@Param("id") id: string, @Body(new ZodValidationPipe(publishOptionsSchema)) options: PublishOptions) {
-    await this.db.updateDraftStatus(id, "APPROVED", "APPROVED");
+    await this.db.updateDraftStatus(id, draftStatuses.approved, approvalStatuses.approved);
     return this.publisher.publishDraft(id, options);
   }
 
-  @Post(":id/reject")
+  @Post(apiRoutes.draftReject)
+  @RequirePermissions(adminPermissions.reviewDrafts)
   async reject(@Param("id") id: string) {
-    return this.db.updateDraftStatus(id, "REJECTED", "REJECTED");
+    return this.db.updateDraftStatus(id, draftStatuses.rejected, approvalStatuses.rejected);
   }
 }

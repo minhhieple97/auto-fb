@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { AgentRun } from "@auto-fb/shared";
+import { agentRunStatuses, type AgentRun } from "@auto-fb/shared";
 import { History, ListTree } from "lucide-react";
 
 type AgentTimelineProps = {
@@ -29,7 +29,7 @@ export function AgentTimeline({ runs, onOpenDetails }: AgentTimelineProps) {
           <li className="rounded-md border border-line p-3 text-sm" key={run.id}>
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium">{run.nodeName}</span>
-              <span className={run.status === "SUCCESS" ? "text-action" : "text-red-700"}>{run.status}</span>
+              <span className={run.status === agentRunStatuses.success ? "text-action" : "text-red-700"}>{run.status}</span>
             </div>
             <div className="mt-1 text-xs text-slate-600">{run.graphRunId}</div>
           </li>

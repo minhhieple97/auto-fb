@@ -1,28 +1,27 @@
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Queue } from "bullmq";
+import { envKeys } from "../common/app.constants.js";
+import { publishQueueConfig } from "./queue.constants.js";
+import { redisConnection } from "./redis-connection.js";
 
 @Injectable()
 export class PublishQueueService implements OnModuleDestroy {
   private readonly queue?: Queue;
 
   constructor(@Inject(ConfigService) config: ConfigService) {
-    const redisUrl = config.get<string>("REDIS_URL");
+    const redisUrl = config.get<string>(envKeys.redisUrl);
     if (redisUrl) {
-      const parsed = new URL(redisUrl);
-      this.queue = new Queue("publish", {
-        connection: {
-          host: parsed.hostname,
-          port: parsed.port ? Number(parsed.port) : 6379,
-          ...(parsed.password ? { password: parsed.password } : {})
-        }
-      });
+      this.queue = new Queue(publishQueueConfig.name, { connection: redisConnection(redisUrl) });
     }
   }
 
   async enqueue(draftId: string): Promise<void> {
     if (!this.queue) return;
-    await this.queue.add("publish-draft", { draftId }, { attempts: 3, backoff: { type: "exponential", delay: 1000 } });
+    await this.queue.add(publishQueueConfig.jobName, { draftId }, {
+      attempts: publishQueueConfig.attempts,
+      backoff: { type: publishQueueConfig.backoffType, delay: publishQueueConfig.backoffDelayMs }
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

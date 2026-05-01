@@ -46,4 +46,14 @@ describe("CampaignRunPanel", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["agent-runs"] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["agent-workflow-runs"] });
   });
+
+  it("disables workflow runs without permission", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<CampaignRunPanel canRun={false} campaignId="campaign-1" />);
+
+    const button = screen.getByRole("button", { name: /run agents/i });
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(runWorkflow).not.toHaveBeenCalled();
+  });
 });

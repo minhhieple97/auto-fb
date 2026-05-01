@@ -104,4 +104,12 @@ describe("DraftInbox", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["drafts"] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["published-posts"] });
   });
+
+  it("does not expose draft review controls without permission", () => {
+    renderWithClient(<DraftInbox canReview={false} drafts={[draft()]} onChanged={vi.fn()} />);
+
+    expect(screen.getByText("Draft copy ready for approval.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reject/i })).not.toBeInTheDocument();
+  });
 });

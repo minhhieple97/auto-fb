@@ -1,8 +1,10 @@
 import type {
   AgentRun,
+  AgentRunFilters,
   AgentWorkflowRunDetail,
   AgentWorkflowRunEvent,
-  AgentWorkflowRunStatus,
+  AgentWorkflowRunFilters,
+  AdminProfile,
   Campaign,
   CreateCampaignInput,
   CreateSourceInput,
@@ -10,15 +12,21 @@ import type {
   PublishedPost,
   Source
 } from "@auto-fb/shared";
+import { apiEndpoints, defaultApiBaseUrl, queryString } from "./api-endpoints.js";
+import { sseProtocol } from "./sse.constants.js";
 import { getAuthAccessToken } from "./supabase.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? defaultApiBaseUrl;
 
-type AgentWorkflowRunFilters = {
-  campaignId?: string | undefined;
-  status?: AgentWorkflowRunStatus | undefined;
-  limit?: number | undefined;
-};
+export class ApiClientError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
@@ -38,20 +46,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => undefined)) as { message?: string } | undefined;
-    throw new Error(payload?.message ?? `Request failed with ${response.status}`);
+    throw new ApiClientError(payload?.message ?? `Request failed with ${response.status}`, response.status);
   }
   return (await response.json()) as T;
-}
-
-function queryString(params: Record<string, string | number | undefined>): string {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== "") {
-      search.set(key, String(value));
-    }
-  }
-  const query = search.toString();
-  return query ? `?${query}` : "";
 }
 
 type StreamAgentWorkflowRunsInput = {
@@ -68,7 +65,7 @@ function streamAgentWorkflowRuns({ campaignId, onEvent, onError }: StreamAgentWo
     headers.set("authorization", `Bearer ${accessToken}`);
   }
 
-  void readEventStream(`${API_BASE_URL}/agent-workflow-runs/stream${queryString({ campaignId })}`, headers, controller.signal, onEvent).catch(
+  void readEventStream(`${API_BASE_URL}${apiEndpoints.agentWorkflowRunsStream}${queryString({ campaignId })}`, headers, controller.signal, onEvent).catch(
     (error: unknown) => {
       if (!controller.signal.aborted) {
         onError?.(error instanceof Error ? error : new Error(String(error)));
@@ -112,42 +109,43 @@ async function readEventStream(
 }
 
 function flushSseBuffer(buffer: string, onEvent: (event: AgentWorkflowRunEvent) => void): string {
-  let cursor = buffer.indexOf("\n\n");
+  let cursor = buffer.indexOf(sseProtocol.eventSeparator);
   while (cursor >= 0) {
     const rawEvent = buffer.slice(0, cursor);
-    buffer = buffer.slice(cursor + 2);
+    buffer = buffer.slice(cursor + sseProtocol.eventSeparator.length);
     const data = rawEvent
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice(5).trimStart())
-      .join("\n");
+      .split(sseProtocol.lineBreakPattern)
+      .filter((line) => line.startsWith(sseProtocol.dataPrefix))
+      .map((line) => line.slice(sseProtocol.dataPrefix.length).trimStart())
+      .join(sseProtocol.lineJoiner);
     if (data) {
       onEvent(JSON.parse(data) as AgentWorkflowRunEvent);
     }
-    cursor = buffer.indexOf("\n\n");
+    cursor = buffer.indexOf(sseProtocol.eventSeparator);
   }
   return buffer;
 }
 
 export const api = {
-  campaigns: () => request<Campaign[]>("/campaigns"),
+  me: () => request<AdminProfile>(apiEndpoints.authMe),
+  campaigns: () => request<Campaign[]>(apiEndpoints.campaigns),
   createCampaign: (input: CreateCampaignInput) =>
-    request<Campaign>("/campaigns", { method: "POST", body: JSON.stringify(input) }),
+    request<Campaign>(apiEndpoints.campaigns, { method: "POST", body: JSON.stringify(input) }),
   updateCampaign: (id: string, input: Partial<CreateCampaignInput>) =>
-    request<Campaign>(`/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
-  sources: (campaignId: string) => request<Source[]>(`/campaigns/${campaignId}/sources`),
+    request<Campaign>(apiEndpoints.campaign(id), { method: "PATCH", body: JSON.stringify(input) }),
+  sources: (campaignId: string) => request<Source[]>(apiEndpoints.campaignSources(campaignId)),
   createSource: (campaignId: string, input: CreateSourceInput) =>
-    request<Source>(`/campaigns/${campaignId}/sources`, { method: "POST", body: JSON.stringify(input) }),
-  runWorkflow: (campaignId: string) => request<AgentWorkflowRunDetail>(`/campaigns/${campaignId}/runs`, { method: "POST" }),
-  agentRuns: (filters: { campaignId?: string | undefined; graphRunId?: string | undefined } | string = {}) => {
+    request<Source>(apiEndpoints.campaignSources(campaignId), { method: "POST", body: JSON.stringify(input) }),
+  runWorkflow: (campaignId: string) => request<AgentWorkflowRunDetail>(apiEndpoints.campaignRuns(campaignId), { method: "POST" }),
+  agentRuns: (filters: AgentRunFilters | string = {}) => {
     const normalized = typeof filters === "string" ? { campaignId: filters } : filters;
-    return request<AgentRun[]>(`/agent-runs${queryString(normalized)}`);
+    return request<AgentRun[]>(`${apiEndpoints.agentRuns}${queryString(normalized)}`);
   },
   agentWorkflowRuns: (filters: AgentWorkflowRunFilters = {}) =>
-    request<AgentWorkflowRunDetail[]>(`/agent-workflow-runs${queryString(filters)}`),
+    request<AgentWorkflowRunDetail[]>(`${apiEndpoints.agentWorkflowRuns}${queryString(filters)}`),
   streamAgentWorkflowRuns,
-  drafts: () => request<PostDraft[]>("/drafts?status=PENDING_APPROVAL"),
-  approveDraft: (id: string) => request<PublishedPost>(`/drafts/${id}/approve`, { method: "POST", body: JSON.stringify({}) }),
-  rejectDraft: (id: string) => request<PostDraft>(`/drafts/${id}/reject`, { method: "POST", body: JSON.stringify({}) }),
-  publishedPosts: () => request<PublishedPost[]>("/published-posts")
+  drafts: () => request<PostDraft[]>(apiEndpoints.drafts()),
+  approveDraft: (id: string) => request<PublishedPost>(apiEndpoints.draftApprove(id), { method: "POST", body: JSON.stringify({}) }),
+  rejectDraft: (id: string) => request<PostDraft>(apiEndpoints.draftReject(id), { method: "POST", body: JSON.stringify({}) }),
+  publishedPosts: () => request<PublishedPost[]>(apiEndpoints.publishedPosts)
 };

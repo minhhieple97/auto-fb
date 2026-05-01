@@ -1,11 +1,15 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  adminProfileSchema,
+  adminPermissions,
   createCampaignSchema,
   createSourceSchema,
   agentRunSchema,
   agentWorkflowRunDetailSchema,
   postDraftSchema,
   publishOptionsSchema,
+  permissionsForRole,
+  roleHasPermission,
   updateCampaignSchema
 } from "./index.js";
 import type { Database, Json, Tables, TablesInsert, TablesUpdate } from "./index.js";
@@ -94,9 +98,26 @@ describe("shared API contracts", () => {
     ).toMatchObject({ status: "QUEUED", steps: [] });
   });
 
+  it("defines admin profiles and role permissions centrally", () => {
+    expect(permissionsForRole("viewer")).toEqual([adminPermissions.readDashboardData]);
+    expect(roleHasPermission("editor", adminPermissions.runWorkflow)).toBe(true);
+    expect(roleHasPermission("viewer", adminPermissions.runWorkflow)).toBe(false);
+    expect(
+      adminProfileSchema.parse({
+        authUserId: "user_1",
+        email: "admin@example.com",
+        role: "owner",
+        status: "active",
+        permissions: permissionsForRole("owner")
+      })
+    ).toMatchObject({ role: "owner" });
+  });
+
   it("exports generated Supabase database helper types", () => {
     expectTypeOf<Database["public"]["Tables"]>().toHaveProperty("campaigns");
+    expectTypeOf<Database["public"]["Tables"]>().toHaveProperty("admin_users");
     expectTypeOf<Database["public"]["Tables"]>().toHaveProperty("agent_workflow_runs");
+    expectTypeOf<Tables<"admin_users">["role"]>().toEqualTypeOf<"owner" | "editor" | "viewer">();
     expectTypeOf<Tables<"campaigns">["brand_voice"]>().toEqualTypeOf<string>();
     expectTypeOf<TablesInsert<"campaigns">>().toMatchTypeOf<{
       name: string;
