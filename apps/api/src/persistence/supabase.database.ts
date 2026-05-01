@@ -3,6 +3,9 @@ import { ConfigService } from "@nestjs/config";
 import type {
   AgentRun,
   AgentRunStatus,
+  AgentWorkflowRun,
+  AgentWorkflowRunDetail,
+  AgentWorkflowRunStatus,
   ApprovalStatus,
   Campaign,
   CampaignStatus,
@@ -28,11 +31,16 @@ import { randomUUID } from "node:crypto";
 import { nowIso } from "../common/time.js";
 import type {
   CreateAgentRunInput,
+  CreateAgentWorkflowRunInput,
   CreateContentInput,
   CreateDraftInput,
   CreateImageAssetInput,
   CreatePublishedPostInput,
-  DatabaseRepository
+  DatabaseRepository,
+  AgentRunFilters,
+  AgentWorkflowRunFilters,
+  UpdateAgentRunInput,
+  UpdateAgentWorkflowRunInput
 } from "./database.repository.js";
 
 type SupabaseRequestOptions = Omit<RequestInit, "headers"> & {
@@ -53,6 +61,7 @@ type PostDraftJoinedRow = PostDraftRow & {
 
 type PublishedPostRow = Tables<"published_posts">;
 type AgentRunRow = Tables<"agent_runs">;
+type AgentWorkflowRunRow = Tables<"agent_workflow_runs">;
 
 const DRAFT_SELECT = "*,content_items(*),image_assets(*)";
 
@@ -287,17 +296,85 @@ export class SupabaseDatabase implements DatabaseRepository {
       output_json: toJson(input.outputJson, "agent_runs.output_json"),
       status: input.status,
       error_message: input.errorMessage ?? null,
+      started_at: input.startedAt ?? null,
+      completed_at: input.completedAt ?? null,
       created_at: nowIso()
     });
     return toAgentRun(row);
   }
 
-  async listAgentRuns(campaignId?: string): Promise<AgentRun[]> {
+  async updateAgentRun(id: string, input: UpdateAgentRunInput): Promise<AgentRun> {
+    const patch: TablesUpdate<"agent_runs"> = {};
+    if (input.inputJson !== undefined) patch.input_json = toJson(input.inputJson, "agent_runs.input_json");
+    if (input.outputJson !== undefined) patch.output_json = toJson(input.outputJson, "agent_runs.output_json");
+    if (input.status !== undefined) patch.status = input.status;
+    if (input.errorMessage !== undefined) patch.error_message = input.errorMessage;
+    if (input.startedAt !== undefined) patch.started_at = input.startedAt;
+    if (input.completedAt !== undefined) patch.completed_at = input.completedAt;
+
+    const row = await this.updateOne("agent_runs", { id: this.eq(id) }, patch, `Agent run ${id} not found`);
+    return toAgentRun(row);
+  }
+
+  async listAgentRuns(filters?: AgentRunFilters | string): Promise<AgentRun[]> {
+    const normalized = typeof filters === "string" ? { campaignId: filters } : filters;
     const rows = await this.selectMany("agent_runs", {
-      ...(campaignId ? { campaign_id: this.eq(campaignId) } : {}),
+      ...(normalized?.campaignId ? { campaign_id: this.eq(normalized.campaignId) } : {}),
+      ...(normalized?.graphRunId ? { graph_run_id: this.eq(normalized.graphRunId) } : {}),
       order: "created_at.asc"
     });
     return rows.map(toAgentRun);
+  }
+
+  async createAgentWorkflowRun(input: CreateAgentWorkflowRunInput): Promise<AgentWorkflowRunDetail> {
+    const row = await this.insertOne("agent_workflow_runs", {
+      id: randomUUID(),
+      campaign_id: input.campaignId,
+      graph_run_id: input.graphRunId,
+      status: input.status,
+      current_node_name: input.currentNodeName ?? null,
+      triggered_by_user_id: input.triggeredByUserId,
+      triggered_by_email: input.triggeredByEmail ?? null,
+      created_at: nowIso(),
+      started_at: input.startedAt ?? null,
+      finished_at: input.finishedAt ?? null
+    });
+    return this.hydrateAgentWorkflowRun(row);
+  }
+
+  async updateAgentWorkflowRun(graphRunId: string, input: UpdateAgentWorkflowRunInput): Promise<AgentWorkflowRunDetail> {
+    const patch: TablesUpdate<"agent_workflow_runs"> = {};
+    if (input.status !== undefined) patch.status = input.status;
+    if (input.currentNodeName !== undefined) patch.current_node_name = input.currentNodeName;
+    if (input.startedAt !== undefined) patch.started_at = input.startedAt;
+    if (input.finishedAt !== undefined) patch.finished_at = input.finishedAt;
+
+    const row = await this.updateOne(
+      "agent_workflow_runs",
+      { graph_run_id: this.eq(graphRunId) },
+      patch,
+      `Agent workflow run ${graphRunId} not found`
+    );
+    return this.hydrateAgentWorkflowRun(row);
+  }
+
+  async getAgentWorkflowRun(graphRunId: string): Promise<AgentWorkflowRunDetail> {
+    const row = await this.selectOne(
+      "agent_workflow_runs",
+      { graph_run_id: this.eq(graphRunId) },
+      `Agent workflow run ${graphRunId} not found`
+    );
+    return this.hydrateAgentWorkflowRun(row);
+  }
+
+  async listAgentWorkflowRuns(filters: AgentWorkflowRunFilters = {}): Promise<AgentWorkflowRunDetail[]> {
+    const rows = await this.selectMany("agent_workflow_runs", {
+      ...(filters.campaignId ? { campaign_id: this.eq(filters.campaignId) } : {}),
+      ...(filters.status ? { status: this.eq(filters.status) } : {}),
+      ...(filters.limit ? { limit: String(filters.limit) } : {}),
+      order: "created_at.desc"
+    });
+    return Promise.all(rows.map((row) => this.hydrateAgentWorkflowRun(row)));
   }
 
   private async findContentByCampaignHash(campaignId: string, hash: string): Promise<ContentItem | undefined> {
@@ -308,6 +385,13 @@ export class SupabaseDatabase implements DatabaseRepository {
     });
     const row = rows[0];
     return row ? toContentItem(row) : undefined;
+  }
+
+  private async hydrateAgentWorkflowRun(row: AgentWorkflowRunRow): Promise<AgentWorkflowRunDetail> {
+    return {
+      ...toAgentWorkflowRun(row),
+      steps: await this.listAgentRuns({ graphRunId: row.graph_run_id })
+    };
   }
 
   private async selectMany<Table extends SupabaseTable, Row = Tables<Table>>(
@@ -571,6 +655,23 @@ function toAgentRun(row: AgentRunRow): AgentRun {
     outputJson: row.output_json,
     status: row.status as AgentRunStatus,
     ...(row.error_message ? { errorMessage: row.error_message } : {}),
+    ...(row.started_at ? { startedAt: row.started_at } : {}),
+    ...(row.completed_at ? { completedAt: row.completed_at } : {}),
     createdAt: row.created_at
+  };
+}
+
+function toAgentWorkflowRun(row: AgentWorkflowRunRow): AgentWorkflowRun {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    graphRunId: row.graph_run_id,
+    status: row.status as AgentWorkflowRunStatus,
+    ...(row.current_node_name ? { currentNodeName: row.current_node_name } : {}),
+    triggeredByUserId: row.triggered_by_user_id,
+    ...(row.triggered_by_email ? { triggeredByEmail: row.triggered_by_email } : {}),
+    createdAt: row.created_at,
+    ...(row.started_at ? { startedAt: row.started_at } : {}),
+    ...(row.finished_at ? { finishedAt: row.finished_at } : {})
   };
 }

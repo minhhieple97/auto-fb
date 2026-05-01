@@ -1,6 +1,7 @@
 import { NotFoundException } from "@nestjs/common";
 import type {
   AgentRun,
+  AgentWorkflowRunDetail,
   ApprovalStatus,
   Campaign,
   CampaignStatus,
@@ -18,11 +19,16 @@ import { randomUUID } from "node:crypto";
 import { nowIso } from "../src/common/time.js";
 import type {
   CreateAgentRunInput,
+  CreateAgentWorkflowRunInput,
   CreateContentInput,
   CreateDraftInput,
   CreateImageAssetInput,
   CreatePublishedPostInput,
-  DatabaseRepository
+  DatabaseRepository,
+  AgentRunFilters,
+  AgentWorkflowRunFilters,
+  UpdateAgentRunInput,
+  UpdateAgentWorkflowRunInput
 } from "../src/persistence/database.repository.js";
 
 export class FakeDatabase implements DatabaseRepository {
@@ -33,6 +39,7 @@ export class FakeDatabase implements DatabaseRepository {
   private drafts = new Map<string, PostDraft>();
   private publishedPosts = new Map<string, PublishedPost>();
   private agentRuns = new Map<string, AgentRun>();
+  private agentWorkflowRuns = new Map<string, AgentWorkflowRunDetail>();
 
   createCampaign(input: CreateCampaignInput): Campaign {
     const timestamp = nowIso();
@@ -208,9 +215,72 @@ export class FakeDatabase implements DatabaseRepository {
     return this.clone(run);
   }
 
-  listAgentRuns(campaignId?: string): AgentRun[] {
-    const runs = [...this.agentRuns.values()].filter((run) => !campaignId || run.campaignId === campaignId);
+  updateAgentRun(id: string, input: UpdateAgentRunInput): AgentRun {
+    const existing = this.agentRuns.get(id);
+    if (!existing) throw new NotFoundException(`Agent run ${id} not found`);
+    const updated: AgentRun = {
+      ...existing,
+      ...input
+    };
+    this.agentRuns.set(id, updated);
+    return this.clone(updated);
+  }
+
+  listAgentRuns(filters?: AgentRunFilters | string): AgentRun[] {
+    const normalized = typeof filters === "string" ? { campaignId: filters } : filters;
+    const runs = [...this.agentRuns.values()].filter(
+      (run) =>
+        (!normalized?.campaignId || run.campaignId === normalized.campaignId) &&
+        (!normalized?.graphRunId || run.graphRunId === normalized.graphRunId)
+    );
     return this.sortByCreatedAtAsc(runs);
+  }
+
+  createAgentWorkflowRun(input: CreateAgentWorkflowRunInput): AgentWorkflowRunDetail {
+    this.getCampaign(input.campaignId);
+    const run: AgentWorkflowRunDetail = {
+      id: randomUUID(),
+      ...input,
+      createdAt: nowIso(),
+      steps: []
+    };
+    this.agentWorkflowRuns.set(run.graphRunId, run);
+    return this.clone(run);
+  }
+
+  updateAgentWorkflowRun(graphRunId: string, input: UpdateAgentWorkflowRunInput): AgentWorkflowRunDetail {
+    const existing = this.agentWorkflowRuns.get(graphRunId);
+    if (!existing) throw new NotFoundException(`Agent workflow run ${graphRunId} not found`);
+    const updated: AgentWorkflowRunDetail = {
+      ...existing,
+      steps: this.listAgentRuns({ graphRunId })
+    };
+    if (input.status !== undefined) updated.status = input.status;
+    if (input.currentNodeName !== undefined) {
+      if (input.currentNodeName === null) {
+        delete updated.currentNodeName;
+      } else {
+        updated.currentNodeName = input.currentNodeName;
+      }
+    }
+    if (input.startedAt !== undefined) updated.startedAt = input.startedAt;
+    if (input.finishedAt !== undefined) updated.finishedAt = input.finishedAt;
+    this.agentWorkflowRuns.set(graphRunId, updated);
+    return this.clone(updated);
+  }
+
+  getAgentWorkflowRun(graphRunId: string): AgentWorkflowRunDetail {
+    const run = this.agentWorkflowRuns.get(graphRunId);
+    if (!run) throw new NotFoundException(`Agent workflow run ${graphRunId} not found`);
+    return this.clone({ ...run, steps: this.listAgentRuns({ graphRunId }) });
+  }
+
+  listAgentWorkflowRuns(filters: AgentWorkflowRunFilters = {}): AgentWorkflowRunDetail[] {
+    const runs = [...this.agentWorkflowRuns.values()]
+      .filter((run) => (!filters.campaignId || run.campaignId === filters.campaignId) && (!filters.status || run.status === filters.status))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, filters.limit);
+    return runs.map((run) => this.clone({ ...run, steps: this.listAgentRuns({ graphRunId: run.graphRunId }) }));
   }
 
   hasContentHash(campaignId: string, hash: string): boolean {
@@ -225,6 +295,7 @@ export class FakeDatabase implements DatabaseRepository {
     this.drafts.clear();
     this.publishedPosts.clear();
     this.agentRuns.clear();
+    this.agentWorkflowRuns.clear();
   }
 
   private hydrateDraft(draft: PostDraft): PostDraft {

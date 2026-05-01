@@ -6,6 +6,7 @@ import { PublishingController } from "../src/publishing/publishing.controller.js
 import { SourcesController } from "../src/sources/sources.controller.js";
 import {
   buildAgentRun,
+  buildAgentWorkflowRun,
   buildCampaign,
   buildCampaignInput,
   buildPostDraft,
@@ -93,15 +94,23 @@ describe("PublishingController", () => {
 });
 
 describe("AgentRunsController", () => {
-  it("starts workflow runs and lists agent run history", async () => {
-    const workflowState = { campaignId: "camp_1", graphRunId: "graph_1" };
-    const workflow = { run: vi.fn().mockResolvedValue(workflowState) };
-    const db = { listAgentRuns: vi.fn().mockReturnValue([buildAgentRun()]) };
-    const controller = new AgentRunsController(workflow as never, db as never);
+  it("enqueues workflow runs and lists workflow and step history", async () => {
+    const workflowRun = buildAgentWorkflowRun();
+    const queue = { enqueue: vi.fn().mockResolvedValue(workflowRun) };
+    const events = { stream: vi.fn() };
+    const db = {
+      listAgentRuns: vi.fn().mockReturnValue([buildAgentRun()]),
+      listAgentWorkflowRuns: vi.fn().mockReturnValue([workflowRun])
+    };
+    const controller = new AgentRunsController(queue as never, events as never, db as never);
 
-    await expect(controller.run("camp_1")).resolves.toEqual(workflowState);
-    await expect(controller.list("camp_1")).resolves.toHaveLength(1);
-    expect(workflow.run).toHaveBeenCalledWith("camp_1");
-    expect(db.listAgentRuns).toHaveBeenCalledWith("camp_1");
+    await expect(controller.run("camp_1", { headers: {}, user: { id: "user_1", email: "admin@example.com" } })).resolves.toEqual(
+      workflowRun
+    );
+    await expect(controller.list("camp_1", "graph_1")).resolves.toHaveLength(1);
+    await expect(controller.listWorkflowRuns("camp_1", "QUEUED", "25")).resolves.toHaveLength(1);
+    expect(queue.enqueue).toHaveBeenCalledWith("camp_1", { id: "user_1", email: "admin@example.com" });
+    expect(db.listAgentRuns).toHaveBeenCalledWith({ campaignId: "camp_1", graphRunId: "graph_1" });
+    expect(db.listAgentWorkflowRuns).toHaveBeenCalledWith({ campaignId: "camp_1", status: "QUEUED", limit: 25 });
   });
 });
