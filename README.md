@@ -10,6 +10,32 @@ Fullstack local MVP for a controlled multi-agent Facebook Page publishing workfl
 - `infra/schema.sql`: Supabase/PostgreSQL schema matching the MVP data model.
 - `docker-compose.yml`: Redis for local queue infra when Docker is available.
 
+## Supabase
+
+The Supabase project for this repo is `auto-fb` in org `kgotqpeaxktsftegemkr`:
+
+- Project ref: `oargectikpgjmzmotdmp`
+- Dashboard: https://supabase.com/dashboard/project/oargectikpgjmzmotdmp
+- Region: `ap-south-1`
+
+Schema changes live in `supabase/migrations`. To apply pending migrations from a linked local checkout:
+
+```bash
+supabase link --project-ref oargectikpgjmzmotdmp
+pnpm db:push
+```
+
+Generated database types live at `packages/shared/src/database.types.ts`. Regenerate them after schema changes:
+
+```bash
+pnpm db:types
+```
+
+GitHub Actions pushes Supabase migrations on every push to `main`. The workflow requires these repository secrets:
+
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_DB_PASSWORD`
+
 ## Local Run
 
 ```bash
@@ -23,7 +49,7 @@ Open:
 - API: http://localhost:3000
 - Admin: http://localhost:5173
 
-Before starting the API, apply `infra/schema.sql` to the Supabase project and set `SUPABASE_URL` plus `SUPABASE_SECRET_KEY` in `.env`. `PUBLISH_DRY_RUN=true` is the default behavior.
+Before starting the API, apply Supabase migrations and set `SUPABASE_URL` plus `SUPABASE_SECRET_KEY` in `.env`. `PUBLISH_DRY_RUN=true` is the default behavior.
 
 ## Environment
 
@@ -33,6 +59,7 @@ Important values:
 
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`: required by the admin app for Supabase login/logout. `VITE_SUPABASE_ANON_KEY` is accepted as a legacy fallback for older Supabase projects.
 - `SUPABASE_URL`: Supabase project URL used by the API.
+- `SUPABASE_PROJECT_REF`: Supabase project ref used by local CLI scripts, defaults to `oargectikpgjmzmotdmp` in package scripts.
 - `SUPABASE_SECRET_KEY`: server-only Supabase secret key used by the API. Legacy `SUPABASE_SERVICE_ROLE_KEY` is also accepted, but do not expose either key to the admin/browser bundle.
 - `SUPABASE_SCHEMA`: optional Postgres schema, defaults to `public`.
 - `META_PAGE_ACCESS_TOKEN`: required for real Facebook publishing.
