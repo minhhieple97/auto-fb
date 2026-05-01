@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { resolve } from "node:path";
 import { CampaignsModule } from "./campaigns/campaigns.module.js";
 import { SourcesModule } from "./sources/sources.module.js";
 import { DraftsModule } from "./drafts/drafts.module.js";
@@ -14,7 +15,7 @@ import { FanpagesModule } from "./fanpages/fanpages.module.js";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: [resolve(process.cwd(), "../../.env"), ".env"] }),
     PersistenceModule,
     AuthModule,
     LlmModule,

@@ -86,7 +86,7 @@ export function SourcePanel({ canCreate = true, fanpageId, sources }: SourcePane
                 <span className="hidden sm:inline">Add</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[560px] bg-white p-6 sm:rounded-xl shadow-lg border-slate-200">
+            <DialogContent className="sm:max-w-[680px] max-h-[85vh] overflow-y-auto bg-white p-6 sm:rounded-xl shadow-lg border-slate-200">
               <DialogHeader>
                 <DialogTitle className="text-xl font-bold text-slate-900">Add Content Source</DialogTitle>
               </DialogHeader>
@@ -373,7 +373,7 @@ function SearchSourceTab({ fanpageId, canCreate, onSuccess }: { fanpageId: strin
       )}
 
       {searchResults && searchResults.results.length > 0 && (
-        <div className="border border-slate-200 rounded-lg">
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200 rounded-t-lg">
             <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
               <input
@@ -386,7 +386,7 @@ function SearchSourceTab({ fanpageId, canCreate, onSuccess }: { fanpageId: strin
             </label>
             <span className="text-xs text-slate-400">{searchResults.results.length} results</span>
           </div>
-          <ScrollArea className="max-h-64">
+          <div className="max-h-80 overflow-y-auto">
             <div className="divide-y divide-slate-100">
               {searchResults.results.map((result) => (
                 <label
@@ -397,11 +397,11 @@ function SearchSourceTab({ fanpageId, canCreate, onSuccess }: { fanpageId: strin
                 >
                   <input
                     type="checkbox"
-                    className="mt-0.5 rounded border-slate-300"
+                    className="mt-0.5 shrink-0 rounded border-slate-300"
                     checked={selectedIds.has(result.id)}
                     onChange={() => toggleSelect(result.id)}
                   />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     <p className="text-sm font-medium text-slate-800 truncate">{result.title}</p>
                     <p className="text-xs text-slate-500 truncate mt-0.5">{result.url}</p>
                     {result.snippet && (
@@ -411,7 +411,7 @@ function SearchSourceTab({ fanpageId, canCreate, onSuccess }: { fanpageId: strin
                 </label>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </div>
       )}
 
