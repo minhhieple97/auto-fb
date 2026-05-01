@@ -60,4 +60,15 @@ describe("SourcePanel", () => {
     );
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["sources"] }));
   });
+
+  it("validates the source URL before creating a source", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<SourcePanel campaignId="campaign-1" sources={[]} />);
+
+    await user.type(screen.getByPlaceholderText("https://example.com/feed.xml"), "not-a-url");
+    await user.click(screen.getByRole("button", { name: /add source/i }));
+
+    expect(await screen.findByText("Enter a valid source URL.")).toBeInTheDocument();
+    expect(createSource).not.toHaveBeenCalled();
+  });
 });

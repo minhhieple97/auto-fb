@@ -79,4 +79,16 @@ describe("CampaignPanel", () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith("camp_new"));
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["campaigns"] });
   });
+
+  it("validates required campaign fields before creating a campaign", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<CampaignPanel selectedCampaignId={undefined} onSelect={vi.fn()} onCreated={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /create/i }));
+
+    expect(await screen.findByText("Campaign name must be at least 2 characters.")).toBeInTheDocument();
+    expect(screen.getByText("Topic must be at least 2 characters.")).toBeInTheDocument();
+    expect(screen.getByText("Facebook Page ID is required.")).toBeInTheDocument();
+    expect(createCampaign).not.toHaveBeenCalled();
+  });
 });

@@ -1,9 +1,15 @@
-import { FormEvent, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateCampaignInput, LlmProvider } from "@auto-fb/shared";
+import { llmProviderSchema, type CreateCampaignInput, type LlmProvider } from "@auto-fb/shared";
 import { ListChecks, Plus } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { Button } from "../../components/ui/button.js";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "../../components/ui/form.js";
+import { Input } from "../../components/ui/input.js";
+import { Select } from "../../components/ui/select.js";
+import { Textarea } from "../../components/ui/textarea.js";
 import { api } from "../../lib/api-client.js";
-import { stringField } from "../../lib/form.js";
 import { providerModels } from "./provider-models.js";
 
 type CampaignPanelProps = {
@@ -12,9 +18,37 @@ type CampaignPanelProps = {
   onCreated: (id: string) => void;
 };
 
+const campaignFormSchema = z.object({
+  name: z.string().trim().min(2, "Campaign name must be at least 2 characters."),
+  topic: z.string().trim().min(2, "Topic must be at least 2 characters."),
+  language: z.string().trim().min(2, "Language is required."),
+  brandVoice: z.string().trim().min(2, "Brand voice is required."),
+  targetPageId: z.string().trim().min(1, "Facebook Page ID is required."),
+  llmProvider: llmProviderSchema,
+  llmModel: z.string().trim().min(1, "Model is required.")
+}) satisfies z.ZodType<CreateCampaignInput>;
+
+const campaignDefaultValues: CreateCampaignInput = {
+  name: "",
+  topic: "",
+  language: "vi",
+  brandVoice: "helpful, concise, practical",
+  targetPageId: "",
+  llmProvider: "openai",
+  llmModel: providerModels.openai[0] ?? "gpt-4o-mini"
+};
+
+function firstModelForProvider(provider: LlmProvider) {
+  return providerModels[provider]?.[0] ?? providerModels.openai[0] ?? "gpt-4o-mini";
+}
+
 export function CampaignPanel({ selectedCampaignId, onSelect, onCreated }: CampaignPanelProps) {
   const queryClient = useQueryClient();
   const campaigns = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
+  const form = useForm<CreateCampaignInput>({
+    resolver: zodResolver(campaignFormSchema),
+    defaultValues: campaignDefaultValues
+  });
   const createCampaign = useMutation({
     mutationFn: api.createCampaign,
     onSuccess: async (campaign) => {
@@ -22,25 +56,17 @@ export function CampaignPanel({ selectedCampaignId, onSelect, onCreated }: Campa
       onCreated(campaign.id);
     }
   });
-  const [provider, setProvider] = useState<LlmProvider>("openai");
 
+  const provider = form.watch("llmProvider");
   const models = providerModels[provider] ?? providerModels.openai;
-  const firstModel = models[0] ?? "gpt-4o-mini";
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const input: CreateCampaignInput = {
-      name: stringField(form, "name"),
-      topic: stringField(form, "topic"),
-      language: stringField(form, "language", "vi"),
-      brandVoice: stringField(form, "brandVoice", "helpful, concise, practical"),
-      targetPageId: stringField(form, "targetPageId"),
-      llmProvider: provider,
-      llmModel: stringField(form, "llmModel", firstModel)
-    };
-    createCampaign.mutate(input);
-    event.currentTarget.reset();
+  function submit(values: CreateCampaignInput) {
+    createCampaign.mutate(values);
+    form.reset({
+      ...campaignDefaultValues,
+      llmProvider: values.llmProvider,
+      llmModel: firstModelForProvider(values.llmProvider)
+    });
   }
 
   return (
@@ -64,33 +90,126 @@ export function CampaignPanel({ selectedCampaignId, onSelect, onCreated }: Campa
           </button>
         ))}
       </div>
-      <form className="grid gap-2" onSubmit={submit}>
-        <input className="field" name="name" placeholder="Campaign name" required />
-        <input className="field" name="topic" placeholder="Topic" required />
-        <input className="field" name="targetPageId" placeholder="Facebook Page ID" required />
-        <input className="field" name="language" placeholder="Language" defaultValue="vi" />
-        <textarea className="field min-h-20" name="brandVoice" placeholder="Brand voice" defaultValue="helpful, concise, practical" />
-        <div className="grid grid-cols-2 gap-2">
-          <select className="field" value={provider} onChange={(event) => setProvider(event.target.value as LlmProvider)}>
-            {Object.keys(providerModels).map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <select className="field" name="llmModel" defaultValue={firstModel} key={provider}>
-            {models.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button className="button bg-ink text-white" title="Create campaign">
-          <Plus size={16} />
-          Create
-        </button>
-      </form>
+      <Form {...form}>
+        <form className="grid gap-3" noValidate onSubmit={form.handleSubmit(submit)}>
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Campaign name</FormLabel>
+                <FormControl>
+                  <Input placeholder="Campaign name" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="topic"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Topic</FormLabel>
+                <FormControl>
+                  <Input placeholder="Topic" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="targetPageId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Facebook Page ID</FormLabel>
+                <FormControl>
+                  <Input placeholder="Facebook Page ID" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="language"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Language</FormLabel>
+                <FormControl>
+                  <Input placeholder="Language" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="brandVoice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Brand voice</FormLabel>
+                <FormControl>
+                  <Textarea placeholder="Brand voice" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <FormField
+              control={form.control}
+              name="llmProvider"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Provider</FormLabel>
+                  <FormControl>
+                    <Select
+                      {...field}
+                      onChange={(event) => {
+                        const nextProvider = event.target.value as LlmProvider;
+                        field.onChange(nextProvider);
+                        form.setValue("llmModel", firstModelForProvider(nextProvider), { shouldValidate: true });
+                      }}
+                    >
+                      {Object.keys(providerModels).map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="llmModel"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Model</FormLabel>
+                  <FormControl>
+                    <Select {...field}>
+                      {models.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <Button disabled={createCampaign.isPending} title="Create campaign" type="submit">
+            <Plus size={16} />
+            {createCampaign.isPending ? "Creating" : "Create"}
+          </Button>
+        </form>
+      </Form>
     </div>
   );
 }
