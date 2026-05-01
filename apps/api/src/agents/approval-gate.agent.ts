@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { Campaign, ImageAsset, PostDraft } from "@auto-fb/shared";
+import { approvalStatuses, draftStatuses, type Campaign, type ImageAsset, type PostDraft } from "@auto-fb/shared";
 import { DATABASE_REPOSITORY, type DatabaseRepository } from "../persistence/database.repository.js";
 import type { QaResult, UnderstoodContent } from "./agent.types.js";
 
@@ -19,10 +19,10 @@ export class ApprovalGateAgent {
       contentItemId: input.understood.item.id,
       ...(input.imageAsset ? { imageAssetId: input.imageAsset.id } : {}),
       text: input.draftText,
-      status: "PENDING_APPROVAL",
+      status: draftStatuses.pendingApproval,
       riskScore: input.qa.riskScore,
       riskFlags: input.qa.riskFlags,
-      approvalStatus: "PENDING"
+      approvalStatus: approvalStatuses.pending
     });
   }
 }

@@ -1,5 +1,6 @@
 import Parser from "rss-parser";
-import type { Source } from "@auto-fb/shared";
+import { sourceTypes, type Source } from "@auto-fb/shared";
+import { collectorLimits } from "./collector.constants.js";
 import type { RawContentItem, SourceAdapter } from "./content-source.types.js";
 
 type RssItem = {
@@ -16,7 +17,7 @@ export class RssAdapter implements SourceAdapter {
   private readonly parser = new Parser<Record<string, unknown>, RssItem>();
 
   supports(source: Source): boolean {
-    return source.type === "rss";
+    return source.type === sourceTypes.rss;
   }
 
   async collect(source: Source): Promise<RawContentItem[]> {
@@ -25,7 +26,7 @@ export class RssAdapter implements SourceAdapter {
       throw new Error(`RSS source ${source.url} returned ${response.status}`);
     }
     const feed = await this.parser.parseString(await response.text());
-    return (feed.items ?? []).slice(0, 10).map((item) => ({
+    return (feed.items ?? []).slice(0, collectorLimits.maxItemsPerSource).map((item) => ({
       sourceId: source.id,
       sourceUrl: item.link ?? source.url,
       title: item.title ?? "Untitled RSS item",

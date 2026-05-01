@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
-import type { Source } from "@auto-fb/shared";
+import { sourceDefaults, type Source } from "@auto-fb/shared";
 import { ApiAdapter } from "./api.adapter.js";
+import { allowedSourceProtocols } from "./collector.constants.js";
 import type { RawContentItem, SourceAdapter } from "./content-source.types.js";
 import { RssAdapter } from "./rss.adapter.js";
 import { StaticHtmlAdapter } from "./static-html.adapter.js";
@@ -27,11 +28,11 @@ export class CollectorService {
 }
 
 function assertWhitelistedSource(source: Source): void {
-  if (source.crawlPolicy !== "whitelist_only") {
+  if (source.crawlPolicy !== sourceDefaults.crawlPolicy) {
     throw new Error(`Unsupported crawl policy ${source.crawlPolicy}`);
   }
   const url = new URL(source.url);
-  if (!["http:", "https:"].includes(url.protocol)) {
+  if (!allowedSourceProtocols.includes(url.protocol as (typeof allowedSourceProtocols)[number])) {
     throw new Error(`Unsupported source protocol ${url.protocol}`);
   }
 }

@@ -1,4 +1,5 @@
-import type { LlmProvider } from "@auto-fb/shared";
+import { llmProviders, type LlmProvider } from "@auto-fb/shared";
+import { llmDefaults, llmEndpoints } from "./llm.constants.js";
 import type { GeneratePostInput, GeneratePostResult, LlmClient } from "./llm.types.js";
 
 type HttpClientOptions = {
@@ -10,17 +11,17 @@ export class HttpLlmClient implements LlmClient {
   constructor(private readonly options: HttpClientOptions) {}
 
   async generatePost(input: GeneratePostInput): Promise<GeneratePostResult> {
-    if (this.options.provider === "anthropic") {
+    if (this.options.provider === llmProviders.anthropic) {
       return this.callAnthropic(input);
     }
-    if (this.options.provider === "gemini") {
+    if (this.options.provider === llmProviders.gemini) {
       return this.callGemini(input);
     }
     return this.callOpenAiCompatible(input);
   }
 
   private async callOpenAiCompatible(input: GeneratePostInput): Promise<GeneratePostResult> {
-    const baseUrl = input.provider === "deepseek" ? "https://api.deepseek.com/chat/completions" : "https://api.openai.com/v1/chat/completions";
+    const baseUrl = input.provider === llmProviders.deepseek ? llmEndpoints.deepseekChatCompletions : llmEndpoints.openAiChatCompletions;
     const response = await fetch(baseUrl, {
       method: "POST",
       headers: {
@@ -29,7 +30,7 @@ export class HttpLlmClient implements LlmClient {
       },
       body: JSON.stringify({
         model: input.model,
-        temperature: 0.7,
+        temperature: llmDefaults.temperature,
         messages: [
           { role: "system", content: buildSystemPrompt(input) },
           { role: "user", content: buildUserPrompt(input) }
@@ -46,16 +47,16 @@ export class HttpLlmClient implements LlmClient {
   }
 
   private async callAnthropic(input: GeneratePostInput): Promise<GeneratePostResult> {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch(llmEndpoints.anthropicMessages, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         "x-api-key": this.options.apiKey,
-        "anthropic-version": "2023-06-01"
+        "anthropic-version": llmDefaults.anthropicVersion
       },
       body: JSON.stringify({
         model: input.model,
-        max_tokens: 700,
+        max_tokens: llmDefaults.maxTokens,
         system: buildSystemPrompt(input),
         messages: [{ role: "user", content: buildUserPrompt(input) }]
       })
@@ -71,7 +72,7 @@ export class HttpLlmClient implements LlmClient {
 
   private async callGemini(input: GeneratePostInput): Promise<GeneratePostResult> {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${input.model}:generateContent?key=${this.options.apiKey}`,
+      llmEndpoints.googleGenerateContent(input.model, this.options.apiKey),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
