@@ -58,7 +58,6 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
       return stateFromSession(action.session);
     case "sessionLoading":
       return {
-        error: undefined,
         profile: null,
         session: action.session,
         status: "loading",
@@ -66,7 +65,6 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
       };
     case "profileLoaded":
       return {
-        error: undefined,
         profile: action.profile,
         session: action.session,
         status: "authenticated",
