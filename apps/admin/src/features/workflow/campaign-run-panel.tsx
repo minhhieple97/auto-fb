@@ -1,20 +1,25 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Play } from "lucide-react";
+import type { AgentWorkflowRunDetail } from "@auto-fb/shared";
 import { api } from "../../lib/api-client.js";
 
 type CampaignRunPanelProps = {
   campaignId: string | undefined;
+  onRunCreated?: (run: AgentWorkflowRunDetail) => void;
 };
 
-export function CampaignRunPanel({ campaignId }: CampaignRunPanelProps) {
+export function CampaignRunPanel({ campaignId, onRunCreated }: CampaignRunPanelProps) {
   const queryClient = useQueryClient();
   const runWorkflow = useMutation({
     mutationFn: (id: string) => api.runWorkflow(id),
-    onSuccess: () =>
-      Promise.all([
+    onSuccess: (run) => {
+      onRunCreated?.(run);
+      return Promise.all([
         queryClient.invalidateQueries({ queryKey: ["drafts"] }),
-        queryClient.invalidateQueries({ queryKey: ["agent-runs"] })
-      ])
+        queryClient.invalidateQueries({ queryKey: ["agent-runs"] }),
+        queryClient.invalidateQueries({ queryKey: ["agent-workflow-runs"] })
+      ]);
+    }
   });
 
   return (

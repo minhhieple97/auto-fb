@@ -2,6 +2,8 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   createCampaignSchema,
   createSourceSchema,
+  agentRunSchema,
+  agentWorkflowRunDetailSchema,
   postDraftSchema,
   publishOptionsSchema,
   updateCampaignSchema
@@ -62,8 +64,39 @@ describe("shared API contracts", () => {
     expect(publishOptionsSchema.parse({ dryRun: false })).toEqual({ dryRun: false });
   });
 
+  it("accepts running agent step and workflow run tracking states", () => {
+    expect(
+      agentRunSchema.parse({
+        id: "run_1",
+        campaignId: "camp_1",
+        graphRunId: "graph_1",
+        nodeName: "load_campaign",
+        inputJson: {},
+        outputJson: {},
+        status: "RUNNING",
+        startedAt: "2026-05-01T00:00:01.000Z",
+        createdAt: "2026-05-01T00:00:00.000Z"
+      })
+    ).toMatchObject({ status: "RUNNING" });
+
+    expect(
+      agentWorkflowRunDetailSchema.parse({
+        id: "workflow_1",
+        campaignId: "camp_1",
+        graphRunId: "graph_1",
+        status: "QUEUED",
+        currentNodeName: "load_campaign",
+        triggeredByUserId: "user_1",
+        triggeredByEmail: "admin@example.com",
+        createdAt: "2026-05-01T00:00:00.000Z",
+        steps: []
+      })
+    ).toMatchObject({ status: "QUEUED", steps: [] });
+  });
+
   it("exports generated Supabase database helper types", () => {
     expectTypeOf<Database["public"]["Tables"]>().toHaveProperty("campaigns");
+    expectTypeOf<Database["public"]["Tables"]>().toHaveProperty("agent_workflow_runs");
     expectTypeOf<Tables<"campaigns">["brand_voice"]>().toEqualTypeOf<string>();
     expectTypeOf<TablesInsert<"campaigns">>().toMatchTypeOf<{
       name: string;

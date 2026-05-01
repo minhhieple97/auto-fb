@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, RefreshCw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAdminStore } from "../../app/admin.store.js";
-import { useAuth } from "../../app/auth-provider.js";
+import { invalidateDashboardData } from "../../app/query-invalidation.js";
 import { AgentTimeline } from "../agent-runs/agent-timeline.js";
 import { CampaignPanel } from "../campaigns/campaign-panel.js";
 import { DraftInbox } from "../drafts/draft-inbox.js";
@@ -12,8 +12,8 @@ import { CampaignRunPanel } from "../workflow/campaign-run-panel.js";
 import { api } from "../../lib/api-client.js";
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { signOut, user } = useAuth();
   const selectedCampaignId = useAdminStore((state) => state.selectedCampaignId);
   const setSelectedCampaignId = useAdminStore((state) => state.setSelectedCampaignId);
   const campaigns = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
@@ -25,7 +25,7 @@ export function DashboardPage() {
   const drafts = useQuery({ queryKey: ["drafts"], queryFn: api.drafts });
   const agentRuns = useQuery({
     queryKey: ["agent-runs", selectedCampaignId],
-    queryFn: () => api.agentRuns(selectedCampaignId),
+    queryFn: () => api.agentRuns({ campaignId: selectedCampaignId }),
     enabled: Boolean(selectedCampaignId)
   });
   const publishedPosts = useQuery({ queryKey: ["published-posts"], queryFn: api.publishedPosts });
@@ -36,56 +36,21 @@ export function DashboardPage() {
     }
   }, [campaigns.data, selectedCampaignId, setSelectedCampaignId]);
 
-  const refreshAll = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
-      queryClient.invalidateQueries({ queryKey: ["sources"] }),
-      queryClient.invalidateQueries({ queryKey: ["drafts"] }),
-      queryClient.invalidateQueries({ queryKey: ["agent-runs"] }),
-      queryClient.invalidateQueries({ queryKey: ["published-posts"] })
-    ]);
-  };
-
-  const logout = async () => {
-    await signOut();
-    queryClient.clear();
-  };
+  const refreshDashboard = () => invalidateDashboardData(queryClient);
 
   return (
-    <main className="min-h-screen bg-canvas">
-      <header className="border-b border-line bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-normal text-ink">Auto FB Admin</h1>
-            <p className="text-sm text-slate-600">Multi-agent publishing workflow</p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {user?.email ? <span className="hidden text-sm text-slate-600 sm:inline">{user.email}</span> : null}
-            <button className="button border border-line bg-white text-ink" onClick={refreshAll} title="Refresh">
-              <RefreshCw size={16} />
-              Refresh
-            </button>
-            <button className="button border border-line bg-white text-ink" onClick={logout} title="Sign out">
-              <LogOut size={16} />
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="mx-auto grid max-w-7xl gap-4 px-6 py-6 lg:grid-cols-[360px_1fr]">
+      <aside className="space-y-4">
+        <CampaignPanel selectedCampaignId={selectedCampaignId} onSelect={setSelectedCampaignId} onCreated={setSelectedCampaignId} />
+        <SourcePanel campaignId={selectedCampaignId} sources={sources.data ?? []} />
+      </aside>
 
-      <div className="mx-auto grid max-w-7xl gap-4 px-6 py-6 lg:grid-cols-[360px_1fr]">
-        <aside className="space-y-4">
-          <CampaignPanel selectedCampaignId={selectedCampaignId} onSelect={setSelectedCampaignId} onCreated={setSelectedCampaignId} />
-          <SourcePanel campaignId={selectedCampaignId} sources={sources.data ?? []} />
-        </aside>
-
-        <section className="space-y-4">
-          <CampaignRunPanel campaignId={selectedCampaignId} />
-          <DraftInbox drafts={drafts.data ?? []} onChanged={refreshAll} />
-          <AgentTimeline runs={agentRuns.data ?? []} />
-          <PublishedHistory posts={publishedPosts.data ?? []} />
-        </section>
-      </div>
-    </main>
+      <section className="space-y-4">
+        <CampaignRunPanel campaignId={selectedCampaignId} />
+        <DraftInbox drafts={drafts.data ?? []} onChanged={refreshDashboard} />
+        <AgentTimeline runs={agentRuns.data ?? []} onOpenDetails={() => navigate("/agent-runs")} />
+        <PublishedHistory posts={publishedPosts.data ?? []} />
+      </section>
+    </div>
   );
 }

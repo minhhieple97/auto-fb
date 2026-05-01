@@ -3,6 +3,7 @@ dist/
 coverage/
 .turbo/
 .vite/
+.vercel/
 .codex/
 .agents/
 .env

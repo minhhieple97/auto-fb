@@ -1,4 +1,4 @@
-name: Supabase Migrations
+name: Production Deploy
 
 on:
   push:
@@ -7,7 +7,37 @@ on:
   workflow_dispatch:
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Test
+        run: pnpm -r test
+
   migrate:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,3 +65,95 @@ jobs:
 
       - name: Push database migrations
         run: supabase db push --linked --password "$SUPABASE_DB_PASSWORD" --yes
+
+  deploy-api:
+    if: ${{ vars.ENABLE_VERCEL_DEPLOY == 'true' }}
+    needs: migrate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Check required secrets
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+
+      - name: Pull Vercel project settings
+        working-directory: apps/api
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build API
+        working-directory: apps/api
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy API
+        working-directory: apps/api
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+  deploy-admin:
+    if: ${{ vars.ENABLE_VERCEL_DEPLOY == 'true' }}
+    needs: deploy-api
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Check required secrets
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+
+      - name: Pull Vercel project settings
+        working-directory: apps/admin
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build Admin
+        working-directory: apps/admin
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy Admin
+        working-directory: apps/admin
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

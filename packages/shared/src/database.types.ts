@@ -17,6 +17,7 @@ export type Database = {
       agent_runs: {
         Row: {
           campaign_id: string
+          completed_at: string | null
           created_at: string
           error_message: string | null
           graph_run_id: string
@@ -24,10 +25,12 @@ export type Database = {
           input_json: Json
           node_name: string
           output_json: Json
+          started_at: string | null
           status: string
         }
         Insert: {
           campaign_id: string
+          completed_at?: string | null
           created_at: string
           error_message?: string | null
           graph_run_id: string
@@ -35,10 +38,12 @@ export type Database = {
           input_json: Json
           node_name: string
           output_json: Json
+          started_at?: string | null
           status: string
         }
         Update: {
           campaign_id?: string
+          completed_at?: string | null
           created_at?: string
           error_message?: string | null
           graph_run_id?: string
@@ -46,11 +51,59 @@ export type Database = {
           input_json?: Json
           node_name?: string
           output_json?: Json
+          started_at?: string | null
           status?: string
         }
         Relationships: [
           {
             foreignKeyName: "agent_runs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_workflow_runs: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          current_node_name: string | null
+          finished_at: string | null
+          graph_run_id: string
+          id: string
+          started_at: string | null
+          status: string
+          triggered_by_email: string | null
+          triggered_by_user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at: string
+          current_node_name?: string | null
+          finished_at?: string | null
+          graph_run_id: string
+          id?: string
+          started_at?: string | null
+          status: string
+          triggered_by_email?: string | null
+          triggered_by_user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          current_node_name?: string | null
+          finished_at?: string | null
+          graph_run_id?: string
+          id?: string
+          started_at?: string | null
+          status?: string
+          triggered_by_email?: string | null
+          triggered_by_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_workflow_runs_campaign_id_fkey"
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "campaigns"

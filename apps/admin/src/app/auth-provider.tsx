@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured, missingSupabaseEnv, setCurrentAuthSession } from "../lib/supabase.js";
 
@@ -21,6 +21,12 @@ type AuthContextValue = AuthState & {
   signOut: () => Promise<void>;
 };
 
+type AuthAction =
+  | { session: Session | null; type: "sessionChanged" }
+  | { message: string; type: "authFailed" }
+  | { message: string; type: "unconfigured" }
+  | { message: string; type: "localError" };
+
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const initialState: AuthState = {
@@ -30,8 +36,6 @@ const initialState: AuthState = {
 };
 
 function stateFromSession(session: Session | null): AuthState {
-  setCurrentAuthSession(session);
-
   return {
     session,
     status: session ? "authenticated" : "unauthenticated",
@@ -39,18 +43,50 @@ function stateFromSession(session: Session | null): AuthState {
   };
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [authState, setAuthState] = useState<AuthState>(initialState);
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) {
-      setCurrentAuthSession(null);
-      setAuthState({
-        error: `Missing ${missingSupabaseEnv.join(" and ")}`,
+function authReducer(state: AuthState, action: AuthAction): AuthState {
+  switch (action.type) {
+    case "sessionChanged":
+      return stateFromSession(action.session);
+    case "authFailed":
+      return {
+        error: action.message,
+        session: null,
+        status: "unauthenticated",
+        user: null
+      };
+    case "unconfigured":
+      return {
+        error: action.message,
         session: null,
         status: "unconfigured",
         user: null
-      });
+      };
+    case "localError":
+      return { ...state, error: action.message };
+  }
+}
+
+function applySession(dispatch: Dispatch<AuthAction>, session: Session | null) {
+  setCurrentAuthSession(session);
+  dispatch({ session, type: "sessionChanged" });
+}
+
+function applyAuthFailure(dispatch: Dispatch<AuthAction>, message: string) {
+  setCurrentAuthSession(null);
+  dispatch({ message, type: "authFailed" });
+}
+
+function applyUnconfigured(dispatch: Dispatch<AuthAction>) {
+  setCurrentAuthSession(null);
+  dispatch({ message: `Missing ${missingSupabaseEnv.join(" and ")}`, type: "unconfigured" });
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [authState, dispatch] = useReducer(authReducer, initialState);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      applyUnconfigured(dispatch);
       return;
     }
 
@@ -65,37 +101,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (error) {
-          setCurrentAuthSession(null);
-          setAuthState({
-            error: error.message,
-            session: null,
-            status: "unauthenticated",
-            user: null
-          });
+          applyAuthFailure(dispatch, error.message);
           return;
         }
 
-        setAuthState(stateFromSession(data.session));
+        applySession(dispatch, data.session);
       })
       .catch((error: unknown) => {
         if (!active) {
           return;
         }
 
-        setCurrentAuthSession(null);
-        setAuthState({
-          error: error instanceof Error ? error.message : "Unable to load Supabase session",
-          session: null,
-          status: "unauthenticated",
-          user: null
-        });
+        applyAuthFailure(dispatch, error instanceof Error ? error.message : "Unable to load Supabase session");
       });
 
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (active) {
-        setAuthState(stateFromSession(session));
+        applySession(dispatch, session);
       }
     });
 
@@ -110,17 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      setCurrentAuthSession(null);
-      setAuthState({
-        error: error.message,
-        session: null,
-        status: "unauthenticated",
-        user: null
-      });
+      applyAuthFailure(dispatch, error.message);
       throw error;
     }
 
-    setAuthState(stateFromSession(data.session));
+    applySession(dispatch, data.session);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -128,11 +146,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signOut({ scope: "local" });
 
     if (error) {
-      setAuthState((state) => ({ ...state, error: error.message }));
+      dispatch({ message: error.message, type: "localError" });
       throw error;
     }
 
-    setAuthState(stateFromSession(null));
+    applySession(dispatch, null);
   }, []);
 
   const value = useMemo<AuthContextValue>(

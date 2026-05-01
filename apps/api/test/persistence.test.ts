@@ -255,6 +255,41 @@ describe("SupabaseDatabase", () => {
             output_json: { riskScore: 25 },
             status: "FAILED",
             error_message: "QA unavailable",
+            started_at: "2026-05-01T00:00:01.000Z",
+            completed_at: "2026-05-01T00:00:05.000Z",
+            created_at: "2026-05-01T00:00:00.000Z"
+          }
+        ])
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "workflow_1",
+            campaign_id: "camp_1",
+            graph_run_id: "graph_1",
+            status: "FAILED",
+            current_node_name: "qa_check",
+            triggered_by_user_id: "user_1",
+            triggered_by_email: "admin@example.com",
+            created_at: "2026-05-01T00:00:00.000Z",
+            started_at: "2026-05-01T00:00:01.000Z",
+            finished_at: "2026-05-01T00:00:05.000Z"
+          }
+        ])
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "run_1",
+            campaign_id: "camp_1",
+            graph_run_id: "graph_1",
+            node_name: "qa_check",
+            input_json: { node: "qa_check" },
+            output_json: { riskScore: 25 },
+            status: "FAILED",
+            error_message: "QA unavailable",
+            started_at: "2026-05-01T00:00:01.000Z",
+            completed_at: "2026-05-01T00:00:05.000Z",
             created_at: "2026-05-01T00:00:00.000Z"
           }
         ])
@@ -281,7 +316,38 @@ describe("SupabaseDatabase", () => {
         outputJson: { riskScore: 25 },
         status: "FAILED",
         errorMessage: "QA unavailable",
+        startedAt: "2026-05-01T00:00:01.000Z",
+        completedAt: "2026-05-01T00:00:05.000Z",
         createdAt: "2026-05-01T00:00:00.000Z"
+      }
+    ]);
+    await expect(db().listAgentWorkflowRuns({ campaignId: "camp_1", status: "FAILED", limit: 10 })).resolves.toEqual([
+      {
+        id: "workflow_1",
+        campaignId: "camp_1",
+        graphRunId: "graph_1",
+        status: "FAILED",
+        currentNodeName: "qa_check",
+        triggeredByUserId: "user_1",
+        triggeredByEmail: "admin@example.com",
+        createdAt: "2026-05-01T00:00:00.000Z",
+        startedAt: "2026-05-01T00:00:01.000Z",
+        finishedAt: "2026-05-01T00:00:05.000Z",
+        steps: [
+          {
+            id: "run_1",
+            campaignId: "camp_1",
+            graphRunId: "graph_1",
+            nodeName: "qa_check",
+            inputJson: { node: "qa_check" },
+            outputJson: { riskScore: 25 },
+            status: "FAILED",
+            errorMessage: "QA unavailable",
+            startedAt: "2026-05-01T00:00:01.000Z",
+            completedAt: "2026-05-01T00:00:05.000Z",
+            createdAt: "2026-05-01T00:00:00.000Z"
+          }
+        ]
       }
     ]);
   });

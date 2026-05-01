@@ -1,5 +1,6 @@
 import type {
   AgentRun,
+  AgentWorkflowRunDetail,
   Campaign,
   ContentItem,
   CreateCampaignInput,
@@ -168,6 +169,20 @@ export function buildAgentRun(overrides: Partial<AgentRun> = {}): AgentRun {
     outputJson: {},
     status: "SUCCESS",
     createdAt: fixedIso,
+    ...overrides
+  };
+}
+
+export function buildAgentWorkflowRun(overrides: Partial<AgentWorkflowRunDetail> = {}): AgentWorkflowRunDetail {
+  return {
+    id: "workflow_1",
+    campaignId: "camp_1",
+    graphRunId: "graph_1",
+    status: "QUEUED",
+    triggeredByUserId: "user_1",
+    triggeredByEmail: "admin@example.com",
+    createdAt: fixedIso,
+    steps: [],
     ...overrides
   };
 }

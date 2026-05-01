@@ -1,18 +1,27 @@
 import { useMemo } from "react";
 import type { AgentRun } from "@auto-fb/shared";
-import { History } from "lucide-react";
+import { History, ListTree } from "lucide-react";
 
 type AgentTimelineProps = {
   runs: AgentRun[];
+  onOpenDetails?: () => void;
 };
 
-export function AgentTimeline({ runs }: AgentTimelineProps) {
+export function AgentTimeline({ runs, onOpenDetails }: AgentTimelineProps) {
   const grouped = useMemo(() => runs.slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [runs]);
   return (
     <div className="panel p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <History size={18} />
-        <h2 className="text-base font-semibold">Agent timeline</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <History size={18} />
+          <h2 className="text-base font-semibold">Agent timeline</h2>
+        </div>
+        {onOpenDetails ? (
+          <button className="button min-h-8 border border-line bg-white text-xs text-ink" onClick={onOpenDetails} type="button">
+            <ListTree size={14} />
+            Details
+          </button>
+        ) : null}
       </div>
       <ol className="space-y-2">
         {grouped.length === 0 ? <li className="text-sm text-slate-600">No agent runs</li> : null}
